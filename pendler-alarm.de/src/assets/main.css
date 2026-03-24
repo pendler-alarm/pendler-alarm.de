@@ -1,0 +1,7 @@
+@import './variables.css';
+@import './icons.css';
+@import './base.css';
+
+main {
+  min-height: 100vh;
+}
