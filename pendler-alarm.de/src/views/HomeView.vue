@@ -6,8 +6,8 @@ import Widget from '@/components/Widget.vue';
   <div class="home">
     <Widget>
       <template #icon>logo</template>
-      <template #title>Ecosystemm</template>
-      <template #description>Foobar!</template>
+      <template #title>pendler-alarm.de</template>
+      <template #description>Dein Kalender zwischen Gleis und Alltag.</template>
     </Widget>
   </div>
 </template>
