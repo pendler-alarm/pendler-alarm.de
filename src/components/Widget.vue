@@ -1,23 +1,28 @@
 <template>
-  <section class="hero-card">
-    <div>
-      <p class="eyebrow">
+  <section class="widget" :class="{ 'widget--compact': compact }">
+    <div class="widget-content">
+      <p v-if="hasSubtitle" class="eyebrow">
         <slot name="sub-title"></slot>
       </p>
-      <h1>
+      <component :is="titleTag" class="widget-title">
         <SvgIcon v-if="iconName" :icon="iconName" class="headline-icon" />
         <slot name="title"></slot>
-      </h1>
-      <p class="intro">
+      </component>
+      <p v-if="hasDescription" class="intro">
         <slot name="description"></slot>
       </p>
+      <div v-if="hasBody" class="widget-body">
+        <slot></slot>
+      </div>
     </div>
-    <div class="hero-actions">
-      <ActionButton>
-        <template #label>
-          API
-        </template>
-      </ActionButton>
+    <div v-if="showActions" class="widget-actions">
+      <slot name="actions">
+        <ActionButton>
+          <template #label>
+            API
+          </template>
+        </ActionButton>
+      </slot>
     </div>
   </section>
 </template>
@@ -33,12 +38,33 @@ export default {
     SvgIcon,
   },
   props: {
+    compact: {
+      type: Boolean,
+      default: false,
+    },
     isAuthorized: {
       type: Boolean,
       default: false,
     },
+    showActions: {
+      type: Boolean,
+      default: true,
+    },
+    titleTag: {
+      type: String,
+      default: 'h1',
+    },
   },
   computed: {
+    hasBody() {
+      return Boolean(this.$slots.default?.().length);
+    },
+    hasDescription() {
+      return Boolean(this.$slots.description?.().length);
+    },
+    hasSubtitle() {
+      return Boolean(this.$slots['sub-title']?.().length);
+    },
     iconName() {
       const slot = this.$slots.icon?.();
       const firstNode = slot?.[0];
@@ -51,7 +77,7 @@ export default {
 </script>
 
 <style scoped>
-.hero-card {
+.widget {
   display: flex;
   justify-content: space-between;
   gap: 24px;
@@ -63,6 +89,10 @@ export default {
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
 }
 
+.widget-content {
+  min-width: 0;
+}
+
 .eyebrow {
   margin: 0;
   letter-spacing: 0.16em;
@@ -71,18 +101,29 @@ export default {
   color: #93c5fd;
 }
 
-h1,
-p {
+.widget-title,
+.intro {
   margin: 0;
 }
 
-h1 {
+.widget-title {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-top: 10px;
   font-size: clamp(2rem, 3vw, 3.6rem);
   line-height: 1;
+}
+
+.widget--compact {
+  display: block;
+  padding: 16px 18px;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.widget--compact .widget-title {
+  font-size: 1.35rem;
 }
 
 .headline-icon {
@@ -96,7 +137,11 @@ h1 {
   line-height: 1.5;
 }
 
-.hero-actions {
+.widget-body {
+  margin-top: 16px;
+}
+
+.widget-actions {
   display: flex;
   gap: 12px;
   align-items: flex-start;
@@ -104,10 +149,15 @@ h1 {
 }
 
 @media (max-width: 720px) {
-  .hero-card {
+  .widget {
     padding: 18px;
     border-radius: 22px;
     display: grid;
+  }
+
+  .widget--compact {
+    padding: 16px;
+    border-radius: 18px;
   }
 }
 </style>

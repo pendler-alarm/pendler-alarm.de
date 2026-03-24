@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import Widget from '@/components/Widget.vue'
 
 type ReleaseSection = {
   version: string
@@ -49,22 +50,34 @@ const sections = computed<ReleaseSection[]>(() => {
 
 <template>
   <section class="release-view">
-    <h1>Release History</h1>
+    <Widget>
+      <template #icon>logo</template>
+      <template #sub-title>Builds und Changes</template>
+      <template #title>Release History</template>
+      <template #description>
+        Hier siehst du die veroffentlichten Versionen und die enthaltenen Anderungen.
+      </template>
+    </Widget>
 
     <p v-if="sections.length === 0" class="empty-state">
       Noch keine Releases vorhanden.
     </p>
 
-    <article v-for="section in sections" :key="`${section.version}-${section.date}`" class="release-card">
-      <header>
-        <h2>{{ section.version }}</h2>
-        <p>{{ section.date }}</p>
-      </header>
+    <Widget
+      v-for="section in sections"
+      :key="`${section.version}-${section.date}`"
+      class="release-card"
+      :show-actions="false"
+      :compact="true"
+      title-tag="h2"
+    >
+      <template #sub-title>{{ section.date }}</template>
+      <template #title>{{ section.version }}</template>
 
-      <ul>
+      <ul class="release-list">
         <li v-for="change in section.changes" :key="change">{{ change }}</li>
       </ul>
-    </article>
+    </Widget>
   </section>
 </template>
 
@@ -75,28 +88,12 @@ const sections = computed<ReleaseSection[]>(() => {
   padding: 32px 20px 64px;
 }
 
+.empty-state,
 .release-card {
-  padding: 16px 18px;
-  margin-top: 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 20px;
 }
 
-.release-card header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 10px;
-}
-
-.release-card h2,
-.release-card p {
-  margin: 0;
-}
-
-.release-card ul {
+.release-list {
   margin: 0;
   padding-left: 20px;
 }

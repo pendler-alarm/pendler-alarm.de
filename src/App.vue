@@ -13,7 +13,12 @@ const version = versionStore.state.version
 
     <div id="footer">
       <div class="container text-left">
-        <p class="text-muted credit" style="color: #fff">Version: {{ version }}</p>
+        <p class="text-muted credit" style="color: #fff">
+          Version:
+          <RouterLink class="release-link" to="/releases">
+            {{ version }}
+          </RouterLink>
+        </p>
       </div>
     </div>
   </div>
@@ -32,5 +37,12 @@ export default {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: var(--fg-light);
+}
+
+.release-link {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
 }
 </style>
