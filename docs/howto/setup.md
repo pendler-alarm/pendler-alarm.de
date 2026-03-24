@@ -4,7 +4,7 @@
 
 ```sh
 git clone https://github.com/<your-username>/pendler-alarm.de.git
-cd pendler-alarm.de/pendler-alarm.de
+cd pendler-alarm.de
 ```
 
 2. Install dependencies:
