@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,6 +16,11 @@ type ReleaseMeta = {
   releaseSections: ReleaseSection[];
 };
 
+type GitContext = {
+  cleanup: () => void;
+  cwd: string;
+};
+
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDir, '..');
 const publicApiDir = resolve(projectRoot, 'public/api');
@@ -26,10 +32,10 @@ const log = (message: string, details?: string): void => {
   console.log(`[release-meta] ${message}${suffix}`);
 };
 
-const run = (command: string): string => {
+const runIn = (cwd: string, command: string): string => {
   try {
     return execSync(command, {
-      cwd: projectRoot,
+      cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
@@ -38,10 +44,12 @@ const run = (command: string): string => {
   }
 };
 
-const tryRun = (command: string): boolean => {
+const run = (command: string): string => runIn(projectRoot, command);
+
+const tryRunIn = (cwd: string, command: string): boolean => {
   try {
     execSync(command, {
-      cwd: projectRoot,
+      cwd,
       stdio: ['ignore', 'ignore', 'ignore'],
     });
     return true;
@@ -56,125 +64,122 @@ const getLines = (value: string): string[] =>
     .map((line) => line.trim())
     .filter(Boolean);
 
-const getChanges = (range: string): string[] => {
-  console.log(range);
+const getChanges = (range: string, cwd: string): string[] => {
   if (!range) {
     return [];
   }
 
-  return getLines(run("git log --pretty=format:'%s (%h)' " + range));
+  return getLines(runIn(cwd, "git log --pretty=format:'%s (%h)' " + range));
 };
 
-const getTags = (): string[] => getLines(run("git tag --list 'v*' --sort=-v:refname"));
+const getTags = (cwd: string): string[] =>
+  getLines(runIn(cwd, "git tag --list 'v*' --sort=-v:refname"));
 
-const fetchGitHistory = (isShallow: boolean): boolean => {
-  const fetchBase = 'git fetch --force --prune --filter=blob:none origin';
-  const branchRefs = "'+refs/heads/*:refs/remotes/origin/*'";
+const cloneBareOrigin = (): GitContext | null => {
+  const originUrl = run('git remote get-url origin');
 
-  if (isShallow) {
-    const unshallowCommand = fetchBase + ' --tags --unshallow ' + branchRefs;
-    log('Refreshing Git refs:', '🔎 detected shallow clone, trying partial unshallow fetch');
-    if (tryRun(unshallowCommand)) {
-      log('Refreshing Git refs:', '✅ partial unshallow fetch succeeded');
-      return true;
-    }
-
-    const updateShallowCommand = fetchBase + ' --tags --update-shallow ' + branchRefs;
-    log('Refreshing Git refs:', '⚠️ partial unshallow fetch failed, trying update-shallow fetch');
-    if (tryRun(updateShallowCommand)) {
-      log('Refreshing Git refs:', '✅ partial update-shallow fetch succeeded');
-      return true;
-    }
-
-    return false;
+  if (!originUrl) {
+    return null;
   }
 
-  const fullCommand = fetchBase + ' --tags ' + branchRefs;
-  log('Refreshing Git refs:', '🔎 trying partial history and tag fetch without blobs');
-  if (tryRun(fullCommand)) {
-    log('Refreshing Git refs:', '✅ partial history and tag fetch succeeded');
-    return true;
+  const tempRoot = mkdtempSync(resolve(tmpdir(), 'pendler-alarm-release-meta-'));
+  const bareRepoPath = resolve(tempRoot, 'repo.git');
+  log('Refreshing Git refs:', '🔎 creating temporary bare clone from origin');
+
+  if (!tryRunIn(tempRoot, `git clone --bare ${originUrl} ${bareRepoPath}`)) {
+    rmSync(tempRoot, { force: true, recursive: true });
+    log('Refreshing Git refs:', '⚠️ bare clone failed, continuing with local checkout state');
+    return null;
   }
 
-  return false;
+  log('Refreshing Git refs:', '✅ temporary bare clone is ready');
+  return {
+    cleanup: () => {
+      rmSync(tempRoot, { force: true, recursive: true });
+    },
+    cwd: bareRepoPath,
+  };
 };
 
-const refreshGitRefs = (): void => {
+const resolveGitContext = (): GitContext => {
   if (!run('git rev-parse --is-inside-work-tree')) {
-    return;
+    return {
+      cleanup: () => undefined,
+      cwd: projectRoot,
+    };
   }
 
   const isShallow = run('git rev-parse --is-shallow-repository') === 'true';
-  const hasOrigin = Boolean(run('git remote get-url origin'));
+  const localTags = getTags(projectRoot);
 
-  if (!hasOrigin) {
-    return;
+  if (!isShallow && localTags.length > 0) {
+    return {
+      cleanup: () => undefined,
+      cwd: projectRoot,
+    };
   }
 
-  if (fetchGitHistory(isShallow)) {
-    return;
-  }
-
-  log('Refreshing Git refs:', '⚠️ partial fetch failed, falling back to standard tag fetch');
-  if (!tryRun('git fetch --force --tags --prune origin')) {
-    log('Refreshing Git refs:', '❌ fetch failed, continuing with local checkout state');
-  }
-};
-
-log('Generating release metadata...');
-
-let tags = getTags();
-if (tags.length === 0 || run('git rev-parse --is-shallow-repository') === 'true') {
-  refreshGitRefs();
-  tags = getTags();
-}
-
-const latestTag = tags[0] ?? '';
-const headSha = run('git rev-parse --short HEAD');
-const headDate = run('git log -1 --format=%cs HEAD') || fallbackDate;
-const unreleasedRange = latestTag ? latestTag + '..HEAD' : 'HEAD';
-const unreleasedChanges = headSha ? getChanges(unreleasedRange) : [];
-
-log('Git state:', `head=${headSha || 'unknown'}, latestTag=${latestTag || 'none'}, tags=${tags.length}`);
-log('Unreleased changes:', String(unreleasedChanges.length));
-
-const taggedSections: ReleaseSection[] = tags.map((tag, index) => {
-  const previousTag = tags[index + 1];
-  const range = previousTag ? previousTag + '..' + tag : tag;
-  const date = run('git log -1 --format=%cs ' + tag) || fallbackDate;
-  const changes = getChanges(range);
-
-  return {
-    version: tag,
-    date,
-    changes: changes.length > 0 ? changes : ['No code changes recorded.'],
+  return cloneBareOrigin() ?? {
+    cleanup: () => undefined,
+    cwd: projectRoot,
   };
-});
-
-const sections: ReleaseSection[] = [];
-
-if (unreleasedChanges.length > 0) {
-  const debugVersion = latestTag
-    ? latestTag + '+debug.' + String(unreleasedChanges.length)
-    : 'debug-' + headSha;
-
-  sections.push({
-    version: debugVersion,
-    date: headDate,
-    changes: unreleasedChanges,
-  });
-}
-
-sections.push(...taggedSections);
-
-const appVersion = (sections[0]?.version ?? latestTag) || 'v0.0.0';
-const releaseMeta: ReleaseMeta = {
-  appVersion,
-  releaseSections: sections,
 };
 
-mkdirSync(publicApiDir, { recursive: true });
-writeFileSync(jsonPath, JSON.stringify(releaseMeta, null, 2) + '\n', 'utf8');
+log('Generating release metadata...', '🛠️ collecting git history and release sections');
 
-log('Wrote file:', `json=${jsonPath}`);
-log('Resolved appVersion:', appVersion);
+const gitContext = resolveGitContext();
+
+try {
+  const tags = getTags(gitContext.cwd);
+  const latestTag = tags[0] ?? '';
+  const headSha = runIn(gitContext.cwd, 'git rev-parse --short HEAD');
+  const headDate = runIn(gitContext.cwd, 'git log -1 --format=%cs HEAD') || fallbackDate;
+  const unreleasedRange = latestTag ? latestTag + '..HEAD' : 'HEAD';
+  const unreleasedChanges = headSha ? getChanges(unreleasedRange, gitContext.cwd) : [];
+
+  log('Git state:', `📌 head=${headSha || 'unknown'}, latestTag=${latestTag || 'none'}, tags=${tags.length}`);
+  log('Unreleased changes:', `📝 ${String(unreleasedChanges.length)}`);
+
+  const taggedSections: ReleaseSection[] = tags.map((tag, index) => {
+    const previousTag = tags[index + 1];
+    const range = previousTag ? previousTag + '..' + tag : tag;
+    const date = runIn(gitContext.cwd, 'git log -1 --format=%cs ' + tag) || fallbackDate;
+    const changes = getChanges(range, gitContext.cwd);
+
+    return {
+      version: tag,
+      date,
+      changes: changes.length > 0 ? changes : ['No code changes recorded.'],
+    };
+  });
+
+  const sections: ReleaseSection[] = [];
+
+  if (unreleasedChanges.length > 0) {
+    const debugVersion = latestTag
+      ? latestTag + '+debug.' + String(unreleasedChanges.length)
+      : 'debug-' + headSha;
+
+    sections.push({
+      version: debugVersion,
+      date: headDate,
+      changes: unreleasedChanges,
+    });
+  }
+
+  sections.push(...taggedSections);
+
+  const appVersion = (sections[0]?.version ?? latestTag) || 'v0.0.0';
+  const releaseMeta: ReleaseMeta = {
+    appVersion,
+    releaseSections: sections,
+  };
+
+  mkdirSync(publicApiDir, { recursive: true });
+  writeFileSync(jsonPath, JSON.stringify(releaseMeta, null, 2) + '\n', 'utf8');
+
+  log('Wrote file:', `💾 json=${jsonPath}`);
+  log('Resolved appVersion:', `🏷️ ${appVersion}`);
+} finally {
+  gitContext.cleanup();
+}
