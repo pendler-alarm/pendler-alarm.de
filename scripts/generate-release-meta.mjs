@@ -22,9 +22,19 @@ const run = (command) => {
   } catch {
     return '';
   }
-};
+'};'
+const tagNames = run("git tag --list 'v*' --sort=-v:refname")
+console.log('tagNames');
+console.log(tagNames);
 
-const tags = run("git tag --list 'v*' --sort=-v:refname")
+
+
+// print out last commit
+console.log('Last commit:');
+const lastCommit = run('git log -1 --pretty=format:"%h - %s (%cs)"');
+console.log(lastCommit);
+
+const tags = run(tagNames)
   .split('\n')
   .map((line) => line.trim())
   .filter(Boolean);
