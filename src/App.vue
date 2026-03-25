@@ -6,8 +6,12 @@ import { fetchReleaseMeta, getDefaultReleaseMeta } from '@/lib/release-meta';
 const version = ref(getDefaultReleaseMeta().appVersion);
 
 onMounted(async () => {
-  const meta = await fetchReleaseMeta();
-  version.value = meta.appVersion;
+  try {
+    const meta = await fetchReleaseMeta();
+    version.value = meta.appVersion;
+  } catch {
+    version.value = getDefaultReleaseMeta().appVersion;
+  }
 });
 </script>
 

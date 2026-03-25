@@ -1,8 +1,8 @@
-import { appVersion } from '../generated/release-meta';
+import { getDefaultReleaseMeta } from '../lib/release-meta';
 
 export default {
   state: {
-    version: appVersion,
+    version: getDefaultReleaseMeta().appVersion,
   },
 
   getters: {

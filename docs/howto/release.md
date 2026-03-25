@@ -21,4 +21,4 @@
 - `npm run push:versioned` aborts if there is no commit since the last release tag.
 - On success, `npm run push:versioned` creates a release commit so Vercel receives a fresh branch commit, then creates the new release tag and pushes both.
 - No project files are modified during release; `package.json`, `package-lock.json`, and tracked documentation stay unchanged.
-- Release history and version metadata are generated at build/dev time into `src/generated/*` from Git tags and commits.
+- Release metadata is generated at build/dev time into `public/api/releases.json`, derived from Git tags and commits.

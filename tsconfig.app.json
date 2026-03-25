@@ -6,6 +6,9 @@
     // Extra safety for array and object lookups, but may have false positives.
     "noUncheckedIndexedAccess": true,
 
+    // Make Node.js typings available where browser code imports tool-generated metadata helpers.
+    "types": ["node"],
+
     // Path mapping for cleaner imports.
     "paths": {
       "@/*": ["./src/*"]

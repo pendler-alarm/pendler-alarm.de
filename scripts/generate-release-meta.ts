@@ -4,16 +4,29 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+type ReleaseSection = {
+  version: string;
+  date: string;
+  changes: string[];
+};
+
+type ReleaseMeta = {
+  appVersion: string;
+  releaseSections: ReleaseSection[];
+};
+
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDir, '..');
-const generatedDir = resolve(projectRoot, 'src/generated');
 const publicApiDir = resolve(projectRoot, 'public/api');
-const historyPath = resolve(generatedDir, 'RELEASE_HISTORY.md');
-const metaPath = resolve(generatedDir, 'release-meta.ts');
 const jsonPath = resolve(publicApiDir, 'releases.json');
 const fallbackDate = new Date().toISOString().slice(0, 10);
 
-const run = (command) => {
+const log = (message: string, details?: string): void => {
+  const suffix = details ? ` ${details}` : '';
+  console.log(`[release-meta] ${message}${suffix}`);
+};
+
+const run = (command: string): string => {
   try {
     return execSync(command, {
       cwd: projectRoot,
@@ -25,19 +38,21 @@ const run = (command) => {
   }
 };
 
-const getLines = (value) =>
+const getLines = (value: string): string[] =>
   value
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
 
-const getChanges = (range) => {
+const getChanges = (range: string): string[] => {
   if (!range) {
     return [];
   }
 
   return getLines(run("git log --pretty=format:'%s (%h)' " + range));
 };
+
+log('Generating release metadata...');
 
 const tags = getLines(run("git tag --list 'v*' --sort=-v:refname"));
 const latestTag = tags[0] ?? '';
@@ -46,7 +61,10 @@ const headDate = run('git log -1 --format=%cs HEAD') || fallbackDate;
 const unreleasedRange = latestTag ? latestTag + '..HEAD' : 'HEAD';
 const unreleasedChanges = headSha ? getChanges(unreleasedRange) : [];
 
-const taggedSections = tags.map((tag, index) => {
+log('Git state:', `head=${headSha || 'unknown'}, latestTag=${latestTag || 'none'}, tags=${tags.length}`);
+log('Unreleased changes:', String(unreleasedChanges.length));
+
+const taggedSections: ReleaseSection[] = tags.map((tag, index) => {
   const previousTag = tags[index + 1];
   const range = previousTag ? previousTag + '..' + tag : tag;
   const date = run('git log -1 --format=%cs ' + tag) || fallbackDate;
@@ -59,7 +77,7 @@ const taggedSections = tags.map((tag, index) => {
   };
 });
 
-const sections = [];
+const sections: ReleaseSection[] = [];
 
 if (unreleasedChanges.length > 0) {
   const debugVersion = latestTag
@@ -76,44 +94,13 @@ if (unreleasedChanges.length > 0) {
 sections.push(...taggedSections);
 
 const appVersion = (sections[0]?.version ?? latestTag) || 'v0.0.0';
-const releaseMeta = {
+const releaseMeta: ReleaseMeta = {
   appVersion,
   releaseSections: sections,
 };
 
-const historyLines = ['# Release History', ''];
-for (const section of sections) {
-  historyLines.push('## ' + section.version + ' - ' + section.date);
-  historyLines.push('');
-
-  for (const change of section.changes) {
-    historyLines.push('- ' + change);
-  }
-
-  historyLines.push('');
-}
-
-const metaFile = [
-  'export type ReleaseSection = {',
-  '  version: string',
-  '  date: string',
-  '  changes: string[]',
-  '}',
-  '',
-  'export type ReleaseMeta = {',
-  '  appVersion: string',
-  '  releaseSections: ReleaseSection[]',
-  '}',
-  '',
-  'export const releaseMeta: ReleaseMeta = ' + JSON.stringify(releaseMeta, null, 2),
-  '',
-  'export const appVersion = ' + JSON.stringify(appVersion) + ' as const',
-  'export const releaseSections: ReleaseSection[] = ' + JSON.stringify(sections, null, 2),
-  '',
-].join('\n');
-
-mkdirSync(generatedDir, { recursive: true });
 mkdirSync(publicApiDir, { recursive: true });
-writeFileSync(historyPath, historyLines.join('\n') + '\n', 'utf8');
-writeFileSync(metaPath, metaFile, 'utf8');
 writeFileSync(jsonPath, JSON.stringify(releaseMeta, null, 2) + '\n', 'utf8');
+
+log('Wrote file:', `json=${jsonPath}`);
+log('Resolved appVersion:', appVersion);

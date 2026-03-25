@@ -1,8 +1,13 @@
-import {
-  releaseMeta as generatedReleaseMeta,
-  type ReleaseMeta,
-  type ReleaseSection,
-} from '@/generated/release-meta';
+export type ReleaseSection = {
+  version: string;
+  date: string;
+  changes: string[];
+};
+
+export type ReleaseMeta = {
+  appVersion: string;
+  releaseSections: ReleaseSection[];
+};
 
 const fallbackMeta: ReleaseMeta = {
   appVersion: 'v0.0.0',
@@ -20,10 +25,19 @@ const normalizeReleaseMeta = (meta: ReleaseMeta | null | undefined): ReleaseMeta
   };
 };
 
-export const getDefaultReleaseMeta = (): ReleaseMeta => normalizeReleaseMeta(generatedReleaseMeta);
+export const getDefaultReleaseMeta = (): ReleaseMeta => fallbackMeta;
 
 export const fetchReleaseMeta = async (): Promise<ReleaseMeta> => {
-  return normalizeReleaseMeta(generatedReleaseMeta);
-};
+  const response = await fetch('/api/releases.json', {
+    headers: {
+      Accept: 'application/json',
+    },
+  });
 
-export type { ReleaseMeta, ReleaseSection };
+  if (!response.ok) {
+    throw new Error(`Failed to fetch release metadata: ${response.status}`);
+  }
+
+  const meta = (await response.json()) as ReleaseMeta;
+  return normalizeReleaseMeta(meta);
+};

@@ -18,7 +18,7 @@
     "prepare": "npm run setup:hooks",
     "push:versioned": "bash scripts/push-with-version.sh",
     "push:versioned:verbose": "VERBOSE=1 DRY_RUN=1 bash scripts/push-with-version.sh",
-    "prepare:release-meta": "node scripts/generate-release-meta.mjs",
+    "prepare:release-meta": "TS_NODE_PROJECT=tsconfig.scripts.json node --no-warnings --loader ts-node/esm scripts/generate-release-meta.ts",
     "predev": "npm run prepare:release-meta",
     "prebuild": "npm run prepare:release-meta",
     "pretype-check": "npm run prepare:release-meta"
@@ -47,6 +47,7 @@
     "npm-run-all2": "^8.0.4",
     "oxlint": "~1.51.0",
     "prettier": "3.8.1",
+    "ts-node": "^10.9.2",
     "typescript": "~5.9.3",
     "vite": "^7.3.1",
     "vite-plugin-vue-devtools": "^8.0.7",
