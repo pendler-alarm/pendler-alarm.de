@@ -67,6 +67,38 @@ const getChanges = (range: string): string[] => {
 
 const getTags = (): string[] => getLines(run("git tag --list 'v*' --sort=-v:refname"));
 
+const fetchGitHistory = (isShallow: boolean): boolean => {
+  const fetchBase = 'git fetch --force --prune --filter=blob:none origin';
+  const branchRefs = "'+refs/heads/*:refs/remotes/origin/*'";
+
+  if (isShallow) {
+    const unshallowCommand = fetchBase + ' --tags --unshallow ' + branchRefs;
+    log('Refreshing Git refs:', '🔎 detected shallow clone, trying partial unshallow fetch');
+    if (tryRun(unshallowCommand)) {
+      log('Refreshing Git refs:', '✅ partial unshallow fetch succeeded');
+      return true;
+    }
+
+    const updateShallowCommand = fetchBase + ' --tags --update-shallow ' + branchRefs;
+    log('Refreshing Git refs:', '⚠️ partial unshallow fetch failed, trying update-shallow fetch');
+    if (tryRun(updateShallowCommand)) {
+      log('Refreshing Git refs:', '✅ partial update-shallow fetch succeeded');
+      return true;
+    }
+
+    return false;
+  }
+
+  const fullCommand = fetchBase + ' --tags ' + branchRefs;
+  log('Refreshing Git refs:', '🔎 trying partial history and tag fetch without blobs');
+  if (tryRun(fullCommand)) {
+    log('Refreshing Git refs:', '✅ partial history and tag fetch succeeded');
+    return true;
+  }
+
+  return false;
+};
+
 const refreshGitRefs = (): void => {
   if (!run('git rev-parse --is-inside-work-tree')) {
     return;
@@ -79,17 +111,13 @@ const refreshGitRefs = (): void => {
     return;
   }
 
-  if (isShallow) {
-    log('Refreshing Git refs:', 'detected shallow clone, fetching history and tags from origin');
-    if (tryRun('git fetch --force --tags --prune --unshallow origin')) {
-      return;
-    }
-  } else {
-    log('Refreshing Git refs:', 'fetching tags from origin');
+  if (fetchGitHistory(isShallow)) {
+    return;
   }
 
+  log('Refreshing Git refs:', '⚠️ partial fetch failed, falling back to standard tag fetch');
   if (!tryRun('git fetch --force --tags --prune origin')) {
-    log('Refreshing Git refs:', 'fetch failed, continuing with local checkout state');
+    log('Refreshing Git refs:', '❌ fetch failed, continuing with local checkout state');
   }
 };
 
