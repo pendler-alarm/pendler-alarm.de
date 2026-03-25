@@ -102,22 +102,22 @@ const cloneBareOrigin = (): GitContext | null => {
 };
 
 const resolveGitContext = (): GitContext => {
-  if (!run('git rev-parse --is-inside-work-tree')) {
-    return {
-      cleanup: () => undefined,
-      cwd: projectRoot,
-    };
-  }
+  // if (!run('git rev-parse --is-inside-work-tree')) {
+  //   return {
+  //     cleanup: () => undefined,
+  //     cwd: projectRoot,
+  //   };
+  // }
 
-  const isShallow = run('git rev-parse --is-shallow-repository') === 'true';
-  const localTags = getTags(projectRoot);
+  // const isShallow = run('git rev-parse --is-shallow-repository') === 'true';
+  // const localTags = getTags(projectRoot);
 
-  if (!isShallow && localTags.length > 0) {
-    return {
-      cleanup: () => undefined,
-      cwd: projectRoot,
-    };
-  }
+  // if (!isShallow && localTags.length > 0) {
+  //   return {
+  //     cleanup: () => undefined,
+  //     cwd: projectRoot,
+  //   };
+  // }
 
   return cloneBareOrigin() ?? {
     cleanup: () => undefined,
