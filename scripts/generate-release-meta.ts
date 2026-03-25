@@ -38,6 +38,18 @@ const run = (command: string): string => {
   }
 };
 
+const tryRun = (command: string): boolean => {
+  try {
+    execSync(command, {
+      cwd: projectRoot,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const getLines = (value: string): string[] =>
   value
     .split('\n')
@@ -45,6 +57,7 @@ const getLines = (value: string): string[] =>
     .filter(Boolean);
 
 const getChanges = (range: string): string[] => {
+  console.log(range);
   if (!range) {
     return [];
   }
@@ -52,9 +65,42 @@ const getChanges = (range: string): string[] => {
   return getLines(run("git log --pretty=format:'%s (%h)' " + range));
 };
 
+const getTags = (): string[] => getLines(run("git tag --list 'v*' --sort=-v:refname"));
+
+const refreshGitRefs = (): void => {
+  if (!run('git rev-parse --is-inside-work-tree')) {
+    return;
+  }
+
+  const isShallow = run('git rev-parse --is-shallow-repository') === 'true';
+  const hasOrigin = Boolean(run('git remote get-url origin'));
+
+  if (!hasOrigin) {
+    return;
+  }
+
+  if (isShallow) {
+    log('Refreshing Git refs:', 'detected shallow clone, fetching history and tags from origin');
+    if (tryRun('git fetch --force --tags --prune --unshallow origin')) {
+      return;
+    }
+  } else {
+    log('Refreshing Git refs:', 'fetching tags from origin');
+  }
+
+  if (!tryRun('git fetch --force --tags --prune origin')) {
+    log('Refreshing Git refs:', 'fetch failed, continuing with local checkout state');
+  }
+};
+
 log('Generating release metadata...');
 
-const tags = getLines(run("git tag --list 'v*' --sort=-v:refname"));
+let tags = getTags();
+if (tags.length === 0 || run('git rev-parse --is-shallow-repository') === 'true') {
+  refreshGitRefs();
+  tags = getTags();
+}
+
 const latestTag = tags[0] ?? '';
 const headSha = run('git rev-parse --short HEAD');
 const headDate = run('git log -1 --format=%cs HEAD') || fallbackDate;
