@@ -42,3 +42,5 @@ __screenshots__/
 src/generated/RELEASE_HISTORY.md
 src/generated/release-meta.ts
 public/api/releases.json
+
+tmp/

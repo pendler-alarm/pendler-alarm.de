@@ -1,5 +1,9 @@
 {
   "name": "pendler-alarm.de",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pendler-alarm/pendler-alarm.de.git"
+  },
   "version": "0.0.0",
   "private": true,
   "type": "module",

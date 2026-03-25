@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { execSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,6 +24,8 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDir, '..');
 const publicApiDir = resolve(projectRoot, 'public/api');
 const jsonPath = resolve(publicApiDir, 'releases.json');
+const packageJsonPath = resolve(projectRoot, 'package.json');
+const tempBaseDir = resolve(projectRoot, 'tmp');
 const fallbackDate = new Date().toISOString().slice(0, 10);
 
 const log = (message: string, details?: string): void => {
@@ -44,7 +45,23 @@ const runIn = (cwd: string, command: string): string => {
   }
 };
 
-const run = (command: string): string => runIn(projectRoot, command);
+const getOriginUrlFromPackage = (): string => {
+  try {
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+      repository?: {
+        url?: string;
+      } | string;
+    };
+
+    if (typeof packageJson.repository === 'string') {
+      return packageJson.repository;
+    }
+
+    return packageJson.repository?.url ?? '';
+  } catch {
+    return '';
+  }
+};
 
 const tryRunIn = (cwd: string, command: string): boolean => {
   try {
@@ -76,14 +93,15 @@ const getTags = (cwd: string): string[] =>
   getLines(runIn(cwd, "git tag --list 'v*' --sort=-v:refname"));
 
 const cloneBareOrigin = (): GitContext | null => {
-  const originUrl = run('git remote get-url origin');
+  const originUrl = getOriginUrlFromPackage();
 
   if (!originUrl) {
-    log('Refreshing Git refs:', '⚠️ no origin remote found, cannot refresh refs');
+    log('Refreshing Git refs:', '⚠️ no repository.url in package.json, cannot refresh refs');
     return null;
   }
 
-  const tempRoot = mkdtempSync(resolve(tmpdir(), 'pendler-alarm-release-meta-'));
+  mkdirSync(tempBaseDir, { recursive: true });
+  const tempRoot = mkdtempSync(resolve(tempBaseDir, 'pendler-alarm-release-meta-'));
   const bareRepoPath = resolve(tempRoot, 'repo.git');
   log('Refreshing Git refs:', '🔎 creating temporary bare clone from origin');
 
@@ -97,6 +115,7 @@ const cloneBareOrigin = (): GitContext | null => {
   return {
     cleanup: () => {
       rmSync(tempRoot, { force: true, recursive: true });
+      log('Refreshing Git refs:', '🧹 removed temporary clone directory ' + tempRoot);
     },
     cwd: bareRepoPath,
   };
