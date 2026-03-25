@@ -11,6 +11,7 @@ const publicApiDir = resolve(projectRoot, 'public/api');
 const historyPath = resolve(generatedDir, 'RELEASE_HISTORY.md');
 const metaPath = resolve(generatedDir, 'release-meta.ts');
 const jsonPath = resolve(publicApiDir, 'releases.json');
+const fallbackDate = new Date().toISOString().slice(0, 10);
 
 const run = (command) => {
   try {
@@ -22,35 +23,34 @@ const run = (command) => {
   } catch {
     return '';
   }
-'};'
-const tagNames = run("git tag --list 'v*' --sort=-v:refname")
-console.log('tagNames');
-console.log(tagNames);
+};
 
-
-
-// print out last commit
-console.log('Last commit:');
-const lastCommit = run('git log -1 --pretty=format:"%h - %s (%cs)"');
-console.log(lastCommit);
-
-const tags = run(tagNames)
-  .split('\n')
-  .map((line) => line.trim())
-  .filter(Boolean);
-
-const sections = tags.map((tag, index) => {
-  const previousTag = tags[index + 1];
-  const range = previousTag ? `${previousTag}..${tag}` : tag;
-
-  const date = run(`git log -1 --format=%cs ${tag}`) || new Date().toISOString().slice(0, 10);
-
-  const rawChanges = run(`git log --pretty=format:'%s (%h)' ${range}`);
-  console.log(`changesRaw: ${rawChanges}`);
-  const changes = run(rawChanges)
+const getLines = (value) =>
+  value
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
+
+const getChanges = (range) => {
+  if (!range) {
+    return [];
+  }
+
+  return getLines(run("git log --pretty=format:'%s (%h)' " + range));
+};
+
+const tags = getLines(run("git tag --list 'v*' --sort=-v:refname"));
+const latestTag = tags[0] ?? '';
+const headSha = run('git rev-parse --short HEAD');
+const headDate = run('git log -1 --format=%cs HEAD') || fallbackDate;
+const unreleasedRange = latestTag ? latestTag + '..HEAD' : 'HEAD';
+const unreleasedChanges = headSha ? getChanges(unreleasedRange) : [];
+
+const taggedSections = tags.map((tag, index) => {
+  const previousTag = tags[index + 1];
+  const range = previousTag ? previousTag + '..' + tag : tag;
+  const date = run('git log -1 --format=%cs ' + tag) || fallbackDate;
+  const changes = getChanges(range);
 
   return {
     version: tag,
@@ -59,7 +59,23 @@ const sections = tags.map((tag, index) => {
   };
 });
 
-const appVersion = tags[0] ?? 'v0.0.0';
+const sections = [];
+
+if (unreleasedChanges.length > 0) {
+  const debugVersion = latestTag
+    ? latestTag + '+debug.' + String(unreleasedChanges.length)
+    : 'debug-' + headSha;
+
+  sections.push({
+    version: debugVersion,
+    date: headDate,
+    changes: unreleasedChanges,
+  });
+}
+
+sections.push(...taggedSections);
+
+const appVersion = (sections[0]?.version ?? latestTag) || 'v0.0.0';
 const releaseMeta = {
   appVersion,
   releaseSections: sections,
@@ -67,11 +83,11 @@ const releaseMeta = {
 
 const historyLines = ['# Release History', ''];
 for (const section of sections) {
-  historyLines.push(`## ${section.version} - ${section.date}`);
+  historyLines.push('## ' + section.version + ' - ' + section.date);
   historyLines.push('');
 
   for (const change of section.changes) {
-    historyLines.push(`- ${change}`);
+    historyLines.push('- ' + change);
   }
 
   historyLines.push('');
@@ -89,15 +105,15 @@ const metaFile = [
   '  releaseSections: ReleaseSection[]',
   '}',
   '',
-  `export const releaseMeta: ReleaseMeta = ${JSON.stringify(releaseMeta, null, 2)}`,
+  'export const releaseMeta: ReleaseMeta = ' + JSON.stringify(releaseMeta, null, 2),
   '',
-  `export const appVersion = ${JSON.stringify(appVersion)} as const`,
-  `export const releaseSections: ReleaseSection[] = ${JSON.stringify(sections, null, 2)}`,
+  'export const appVersion = ' + JSON.stringify(appVersion) + ' as const',
+  'export const releaseSections: ReleaseSection[] = ' + JSON.stringify(sections, null, 2),
   '',
 ].join('\n');
 
 mkdirSync(generatedDir, { recursive: true });
 mkdirSync(publicApiDir, { recursive: true });
-writeFileSync(historyPath, `${historyLines.join('\n')}\n`, 'utf8');
+writeFileSync(historyPath, historyLines.join('\n') + '\n', 'utf8');
 writeFileSync(metaPath, metaFile, 'utf8');
-writeFileSync(jsonPath, `${JSON.stringify(releaseMeta, null, 2)}\n`, 'utf8');
+writeFileSync(jsonPath, JSON.stringify(releaseMeta, null, 2) + '\n', 'utf8');

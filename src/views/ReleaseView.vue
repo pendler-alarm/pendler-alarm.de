@@ -4,7 +4,6 @@ import Widget from '@/components/Widget.vue';
 import { fetchReleaseMeta, getDefaultReleaseMeta, type ReleaseSection } from '@/lib/release-meta';
 
 const defaultMeta = getDefaultReleaseMeta();
-console.log('defaultMeta: ', defaultMeta);
 const isLoading = ref(defaultMeta.releaseSections.length === 0);
 const hasLoadError = ref(false);
 const sections = ref<ReleaseSection[]>(defaultMeta.releaseSections);
