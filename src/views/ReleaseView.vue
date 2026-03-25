@@ -4,6 +4,7 @@ import Widget from '@/components/Widget.vue';
 import { fetchReleaseMeta, getDefaultReleaseMeta, type ReleaseSection } from '@/lib/release-meta';
 
 const defaultMeta = getDefaultReleaseMeta();
+console.log('defaultMeta: ', defaultMeta);
 const isLoading = ref(defaultMeta.releaseSections.length === 0);
 const hasLoadError = ref(false);
 const sections = ref<ReleaseSection[]>(defaultMeta.releaseSections);
@@ -32,13 +33,7 @@ onMounted(async () => {
       </template>
     </Widget>
 
-    <Widget
-      v-if="isLoading"
-      class="release-card"
-      :show-actions="false"
-      :compact="true"
-      title-tag="h2"
-    >
+    <Widget v-if="isLoading" class="release-card" :show-actions="false" :compact="true" title-tag="h2">
       <template #sub-title>Status</template>
       <template #title>Release-Historie wird vorbereitet</template>
       <p class="state-copy">
@@ -46,13 +41,7 @@ onMounted(async () => {
       </p>
     </Widget>
 
-    <Widget
-      v-else-if="hasLoadError"
-      class="release-card"
-      :show-actions="false"
-      :compact="true"
-      title-tag="h2"
-    >
+    <Widget v-else-if="hasLoadError" class="release-card" :show-actions="false" :compact="true" title-tag="h2">
       <template #sub-title>Status</template>
       <template #title>Release-Historie aktuell nicht verfugbar</template>
       <p class="state-copy">
@@ -60,13 +49,7 @@ onMounted(async () => {
       </p>
     </Widget>
 
-    <Widget
-      v-else-if="sections.length === 0"
-      class="release-card"
-      :show-actions="false"
-      :compact="true"
-      title-tag="h2"
-    >
+    <Widget v-else-if="sections.length === 0" class="release-card" :show-actions="false" :compact="true" title-tag="h2">
       <template #sub-title>Status</template>
       <template #title>Noch keine Releases vorhanden</template>
       <p class="state-copy">
@@ -74,14 +57,8 @@ onMounted(async () => {
       </p>
     </Widget>
 
-    <Widget
-      v-for="section in sections"
-      :key="`${section.version}-${section.date}`"
-      class="release-card"
-      :show-actions="false"
-      :compact="true"
-      title-tag="h2"
-    >
+    <Widget v-for="section in sections" :key="`${section.version}-${section.date}`" class="release-card"
+      :show-actions="false" :compact="true" title-tag="h2">
       <template #sub-title>{{ section.date }}</template>
       <template #title>{{ section.version }}</template>
 
