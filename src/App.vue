@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
-import versionStore from '@/stores/version'
+import { onMounted, ref } from 'vue';
+import { RouterLink, RouterView } from 'vue-router';
+import { fetchReleaseMeta, getDefaultReleaseMeta } from '@/lib/release-meta';
 
-const version = versionStore.state.version
+const version = ref(getDefaultReleaseMeta().appVersion);
+
+onMounted(async () => {
+  const meta = await fetchReleaseMeta();
+  version.value = meta.appVersion;
+});
 </script>
 
 <template>
@@ -27,7 +33,7 @@ const version = versionStore.state.version
 <script lang="ts">
 export default {
   name: 'App',
-}
+};
 </script>
 
 <style scoped>

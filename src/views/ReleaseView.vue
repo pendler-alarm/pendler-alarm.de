@@ -1,57 +1,30 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import Widget from '@/components/Widget.vue'
+import { onMounted, ref } from 'vue';
+import Widget from '@/components/Widget.vue';
+import { fetchReleaseMeta, getDefaultReleaseMeta, type ReleaseSection } from '@/lib/release-meta';
 
-type ReleaseSection = {
-  version: string
-  date: string
-  changes: string[]
-}
+const defaultMeta = getDefaultReleaseMeta();
+const isLoading = ref(defaultMeta.releaseSections.length === 0);
+const hasLoadError = ref(false);
+const sections = ref<ReleaseSection[]>(defaultMeta.releaseSections);
 
-import releaseHistoryRaw from '../generated/RELEASE_HISTORY.md?raw'
-
-const sections = computed<ReleaseSection[]>(() => {
-  const lines = releaseHistoryRaw.split('\n').map((line) => line.trim())
-  const parsed: ReleaseSection[] = []
-
-  let current: ReleaseSection | null = null
-
-  for (const line of lines) {
-    if (line.startsWith('## v')) {
-      if (current) {
-        parsed.push(current)
-      }
-
-      const header = line.replace('## ', '')
-      const [rawVersion, date = ''] = header.split(' - ')
-      const version = rawVersion ?? 'v0.0.0'
-
-      current = {
-        version,
-        date,
-        changes: [],
-      }
-
-      continue
-    }
-
-    if (line.startsWith('- ') && current) {
-      current.changes.push(line.slice(2))
-    }
+onMounted(async () => {
+  try {
+    const meta = await fetchReleaseMeta();
+    sections.value = meta.releaseSections;
+    hasLoadError.value = false;
+  } catch {
+    sections.value = defaultMeta.releaseSections;
+    hasLoadError.value = true;
+  } finally {
+    isLoading.value = false;
   }
-
-  if (current) {
-    parsed.push(current)
-  }
-
-  return parsed
-})
+});
 </script>
 
 <template>
   <section class="release-view">
     <Widget>
-      <template #icon>logo</template>
       <template #sub-title>Builds und Changes</template>
       <template #title>Release History</template>
       <template #description>
@@ -59,9 +32,47 @@ const sections = computed<ReleaseSection[]>(() => {
       </template>
     </Widget>
 
-    <p v-if="sections.length === 0" class="empty-state">
-      Noch keine Releases vorhanden.
-    </p>
+    <Widget
+      v-if="isLoading"
+      class="release-card"
+      :show-actions="false"
+      :compact="true"
+      title-tag="h2"
+    >
+      <template #sub-title>Status</template>
+      <template #title>Release-Historie wird vorbereitet</template>
+      <p class="state-copy">
+        Die Daten werden beim Start oder Build generiert und stehen gleich hier bereit.
+      </p>
+    </Widget>
+
+    <Widget
+      v-else-if="hasLoadError"
+      class="release-card"
+      :show-actions="false"
+      :compact="true"
+      title-tag="h2"
+    >
+      <template #sub-title>Status</template>
+      <template #title>Release-Historie aktuell nicht verfugbar</template>
+      <p class="state-copy">
+        Es konnten keine Release-Daten geladen werden. Beim nachsten Start oder Build werden sie neu erzeugt.
+      </p>
+    </Widget>
+
+    <Widget
+      v-else-if="sections.length === 0"
+      class="release-card"
+      :show-actions="false"
+      :compact="true"
+      title-tag="h2"
+    >
+      <template #sub-title>Status</template>
+      <template #title>Noch keine Releases vorhanden</template>
+      <p class="state-copy">
+        Sobald Git-Tags vorhanden sind, erscheinen die Versionen automatisch in dieser Ansicht.
+      </p>
+    </Widget>
 
     <Widget
       v-for="section in sections"
@@ -88,7 +99,6 @@ const sections = computed<ReleaseSection[]>(() => {
   padding: 32px 20px 64px;
 }
 
-.empty-state,
 .release-card {
   margin-top: 20px;
 }
@@ -98,7 +108,8 @@ const sections = computed<ReleaseSection[]>(() => {
   padding-left: 20px;
 }
 
-.empty-state {
+.state-copy {
+  margin: 0;
   opacity: 0.75;
 }
 

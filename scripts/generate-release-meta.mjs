@@ -7,8 +7,10 @@ import { fileURLToPath } from 'node:url'
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const projectRoot = resolve(scriptDir, '..')
 const generatedDir = resolve(projectRoot, 'src/generated')
+const publicApiDir = resolve(projectRoot, 'public/api')
 const historyPath = resolve(generatedDir, 'RELEASE_HISTORY.md')
 const metaPath = resolve(generatedDir, 'release-meta.ts')
+const jsonPath = resolve(publicApiDir, 'releases.json')
 
 const run = (command) => {
   try {
@@ -46,6 +48,10 @@ const sections = tags.map((tag, index) => {
 })
 
 const appVersion = tags[0] ?? 'v0.0.0'
+const releaseMeta = {
+  appVersion,
+  releaseSections: sections,
+}
 
 const historyLines = ['# Release History', '']
 for (const section of sections) {
@@ -66,11 +72,20 @@ const metaFile = [
   '  changes: string[]',
   '}',
   '',
+  'export type ReleaseMeta = {',
+  '  appVersion: string',
+  '  releaseSections: ReleaseSection[]',
+  '}',
+  '',
+  `export const releaseMeta: ReleaseMeta = ${JSON.stringify(releaseMeta, null, 2)}`,
+  '',
   `export const appVersion = ${JSON.stringify(appVersion)} as const`,
   `export const releaseSections: ReleaseSection[] = ${JSON.stringify(sections, null, 2)}`,
   '',
 ].join('\n')
 
 mkdirSync(generatedDir, { recursive: true })
+mkdirSync(publicApiDir, { recursive: true })
 writeFileSync(historyPath, `${historyLines.join('\n')}\n`, 'utf8')
 writeFileSync(metaPath, metaFile, 'utf8')
+writeFileSync(jsonPath, `${JSON.stringify(releaseMeta, null, 2)}\n`, 'utf8')
