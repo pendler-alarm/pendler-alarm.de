@@ -79,6 +79,7 @@ const cloneBareOrigin = (): GitContext | null => {
   const originUrl = run('git remote get-url origin');
 
   if (!originUrl) {
+    log('Refreshing Git refs:', '⚠️ no origin remote found, cannot refresh refs');
     return null;
   }
 
@@ -180,6 +181,9 @@ try {
 
   log('Wrote file:', `💾 json=${jsonPath}`);
   log('Resolved appVersion:', `🏷️ ${appVersion}`);
+} catch (error) {
+  log('❌ Error:', String(error));
+
 } finally {
   gitContext.cleanup();
 }
