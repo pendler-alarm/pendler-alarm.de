@@ -22,8 +22,12 @@ export const additionalRoutes: AppRoute[] = [
     view: 'ReleaseView.vue',
   },
   {
-    name: 'test',
-    path: '/other/folder',
-    view: 'test/TestView.vue',
+    name: 'dashboard',
+    view: 'DashboardView.vue',
   },
+  // {
+  //   name: 'test',
+  //   path: '/other/folder',
+  //   view: 'test/TestView.vue',
+  // },
 ];

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -144,6 +144,11 @@ const resolveGitContext = (): GitContext => {
     cwd: projectRoot,
   };
 };
+
+if (existsSync(jsonPath)) {
+  log('Skipping generation:', `ℹ️ release metadata already exists at ${jsonPath}`);
+  process.exit(0);
+}
 
 log('Generating release metadata...', '🛠️ collecting git history and release sections');
 

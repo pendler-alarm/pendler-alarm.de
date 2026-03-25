@@ -44,3 +44,4 @@ src/generated/release-meta.ts
 public/api/releases.json
 
 tmp/
+.env*
