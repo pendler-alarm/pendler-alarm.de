@@ -1,24 +1,56 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
-import {
-  GOOGLE_CALENDAR_SCOPE,
-  createGoogleCalendarAuthClient,
-  hasGrantedScope,
-  revokeGoogleCalendarAccess,
-} from './google-auth';
-
 
 type GoogleAuthStatus = 'idle' | 'loading' | 'authenticated' | 'error';
 
 type PersistedSession = {
   accessToken: string;
   expiresAt: number;
-  grantedScope: string;
 };
 
 const STORAGE_KEY = 'google-calendar-auth';
+const GOOGLE_IDENTITY_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
+const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
+
+type GoogleTokenResponse = {
+  access_token?: string;
+  error?: string;
+  error_description?: string;
+  expires_in?: number;
+};
+
+type GoogleTokenClient = {
+  requestAccessToken: (overrideConfig?: {
+    prompt?: '' | 'consent' | 'select_account';
+    hint?: string;
+  }) => void;
+};
+
+type GoogleOauth2Api = {
+  initTokenClient: (config: {
+    client_id: string;
+    scope: string;
+    callback: (response: GoogleTokenResponse) => void;
+  }) => GoogleTokenClient;
+  revoke: (
+    accessToken: string,
+    callback?: (response?: { successful?: boolean; error?: string; error_description?: string }) => void,
+  ) => void;
+};
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        oauth2: GoogleOauth2Api;
+      };
+    };
+  }
+}
 
 const isBrowser = (): boolean => typeof window !== 'undefined';
+
+let scriptLoadingPromise: Promise<void> | null = null;
 
 const readPersistedSession = (): PersistedSession | null => {
   if (!isBrowser()) {
@@ -34,11 +66,7 @@ const readPersistedSession = (): PersistedSession | null => {
   try {
     const parsed = JSON.parse(rawValue) as Partial<PersistedSession>;
 
-    if (
-      typeof parsed.accessToken !== 'string'
-      || typeof parsed.expiresAt !== 'number'
-      || typeof parsed.grantedScope !== 'string'
-    ) {
+    if (typeof parsed.accessToken !== 'string' || typeof parsed.expiresAt !== 'number') {
       return null;
     }
 
@@ -50,7 +78,6 @@ const readPersistedSession = (): PersistedSession | null => {
     return {
       accessToken: parsed.accessToken,
       expiresAt: parsed.expiresAt,
-      grantedScope: parsed.grantedScope,
     };
   } catch {
     window.sessionStorage.removeItem(STORAGE_KEY);
@@ -71,6 +98,60 @@ const persistSession = (session: PersistedSession | null): void => {
   window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
 };
 
+const loadGoogleIdentityScript = async (): Promise<void> => {
+  if (window.google?.accounts.oauth2) {
+    return;
+  }
+
+  if (!scriptLoadingPromise) {
+    scriptLoadingPromise = new Promise<void>((resolve, reject) => {
+      const existingScript = document.querySelector<HTMLScriptElement>(
+        `script[src="${GOOGLE_IDENTITY_SCRIPT_SRC}"]`,
+      );
+
+      if (existingScript) {
+        if (existingScript.dataset.loaded === 'true') {
+          resolve();
+          return;
+        }
+
+        existingScript.addEventListener('load', () => resolve(), { once: true });
+        existingScript.addEventListener(
+          'error',
+          () => reject(new Error('Google Identity script failed to load.')),
+          { once: true },
+        );
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = GOOGLE_IDENTITY_SCRIPT_SRC;
+      script.async = true;
+      script.defer = true;
+      script.addEventListener(
+        'load',
+        () => {
+          script.dataset.loaded = 'true';
+          resolve();
+        },
+        { once: true },
+      );
+      script.addEventListener(
+        'error',
+        () => reject(new Error('Google Identity script failed to load.')),
+        { once: true },
+      );
+      document.head.appendChild(script);
+    }).finally(() => {
+      if (!window.google?.accounts.oauth2) {
+        scriptLoadingPromise = null;
+      }
+    });
+  }
+
+  await scriptLoadingPromise;
+};
+
 export const useGoogleAuthStore = defineStore('google-auth', () => {
   const persistedSession = readPersistedSession();
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? '';
@@ -78,23 +159,17 @@ export const useGoogleAuthStore = defineStore('google-auth', () => {
   const errorMessage = ref('');
   const accessToken = ref(persistedSession?.accessToken ?? '');
   const expiresAt = ref<number | null>(persistedSession?.expiresAt ?? null);
-  const grantedScope = ref(persistedSession?.grantedScope ?? '');
   const isConfigured = computed(() => clientId.length > 0);
   const isAuthenticated = computed(
-    () =>
-      accessToken.value.length > 0
-      && !!expiresAt.value
-      && expiresAt.value > Date.now()
-      && hasGrantedScope(grantedScope.value, GOOGLE_CALENDAR_SCOPE),
+    () => accessToken.value.length > 0 && !!expiresAt.value && expiresAt.value > Date.now(),
   );
 
-  let googleClient: Awaited<ReturnType<typeof createGoogleCalendarAuthClient>> | null = null;
+  let googleClient: GoogleTokenClient | null = null;
   let initialized = false;
 
   const clearSession = (): void => {
     accessToken.value = '';
     expiresAt.value = null;
-    grantedScope.value = '';
     persistSession(null);
   };
 
@@ -113,33 +188,43 @@ export const useGoogleAuthStore = defineStore('google-auth', () => {
     errorMessage.value = '';
 
     try {
-      googleClient = await createGoogleCalendarAuthClient(clientId, (response) => {
-        if (response.error) {
-          status.value = 'error';
-          errorMessage.value = response.error_description || response.error;
-          return;
-        }
+      await loadGoogleIdentityScript();
 
-        if (!response.access_token) {
-          status.value = 'error';
-          errorMessage.value = 'Google OAuth hat keinen Access Token geliefert.';
-          return;
-        }
+      const googleOauth2Api = window.google?.accounts.oauth2;
 
-        const nextExpiresAt = Date.now() + Math.max(response.expires_in ?? 0, 1) * 1000;
-        const nextGrantedScope = response.scope ?? GOOGLE_CALENDAR_SCOPE;
+      if (!googleOauth2Api) {
+        throw new Error('Google OAuth API is not available.');
+      }
 
-        accessToken.value = response.access_token;
-        expiresAt.value = nextExpiresAt;
-        grantedScope.value = nextGrantedScope;
-        status.value = 'authenticated';
-        errorMessage.value = '';
-        persistSession({
-          accessToken: response.access_token,
-          expiresAt: nextExpiresAt,
-          grantedScope: nextGrantedScope,
-        });
+      googleClient = googleOauth2Api.initTokenClient({
+        client_id: clientId,
+        scope: GOOGLE_CALENDAR_SCOPE,
+        callback: (response) => {
+          if (response.error) {
+            status.value = 'error';
+            errorMessage.value = response.error_description || response.error;
+            return;
+          }
+
+          if (!response.access_token) {
+            status.value = 'error';
+            errorMessage.value = 'Google OAuth hat keinen Access Token geliefert.';
+            return;
+          }
+
+          const nextExpiresAt = Date.now() + Math.max(response.expires_in ?? 0, 1) * 1000;
+
+          accessToken.value = response.access_token;
+          expiresAt.value = nextExpiresAt;
+          status.value = 'authenticated';
+          errorMessage.value = '';
+          persistSession({
+            accessToken: response.access_token,
+            expiresAt: nextExpiresAt,
+          });
+        },
       });
+
       initialized = true;
       status.value = isAuthenticated.value ? 'authenticated' : 'idle';
     } catch (error) {
@@ -158,7 +243,7 @@ export const useGoogleAuthStore = defineStore('google-auth', () => {
 
     status.value = 'loading';
     errorMessage.value = '';
-    googleClient.requestAccessToken({ prompt: 'consent' });
+    googleClient.requestAccessToken({ prompt: accessToken.value ? '' : 'consent' });
   };
 
   const signOut = async (): Promise<void> => {
@@ -168,8 +253,12 @@ export const useGoogleAuthStore = defineStore('google-auth', () => {
     errorMessage.value = '';
     status.value = 'idle';
 
-    if (token) {
-      await revokeGoogleCalendarAccess(token);
+    const googleOauth2Api = window.google?.accounts.oauth2;
+
+    if (token && googleOauth2Api) {
+      await new Promise<void>((resolve) => {
+        googleOauth2Api.revoke(token, () => resolve());
+      });
     }
   };
 
@@ -181,7 +270,6 @@ export const useGoogleAuthStore = defineStore('google-auth', () => {
   return {
     accessToken,
     errorMessage,
-    grantedScope,
     initialize,
     isAuthenticated,
     isConfigured,
