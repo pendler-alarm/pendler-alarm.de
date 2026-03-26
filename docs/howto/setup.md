@@ -19,7 +19,9 @@ npm install
 npm run dev
 ```
 
-4. Open your browser and navigate to `http://localhost:5173` to see the app running.
+4. set up google API credentials as described in [this guide](./google-api.md) to enable authentication features.
+
+5. Open your browser and navigate to `http://localhost:5173` to see the app running.
 
 ## optional
 

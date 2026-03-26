@@ -1,3 +1,5 @@
+import { translate } from '@/i18n';
+
 export type ReleaseSection = {
   version: string;
   date: string;
@@ -35,7 +37,7 @@ export const fetchReleaseMeta = async (): Promise<ReleaseMeta> => {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch release metadata: ${response.status}`);
+    throw new Error(translate('releaseMeta.error.fetchFailed', { status: response.status }));
   }
 
   const meta = (await response.json()) as ReleaseMeta;

@@ -1,12 +1,54 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Widget from '@/components/Widget.vue';
 import { fetchReleaseMeta, getDefaultReleaseMeta, type ReleaseSection } from '@/lib/release-meta';
 
+const { t } = useI18n();
 const defaultMeta = getDefaultReleaseMeta();
 const isLoading = ref(defaultMeta.releaseSections.length === 0);
 const hasLoadError = ref(false);
 const sections = ref<ReleaseSection[]>(defaultMeta.releaseSections);
+
+const releaseStateMessages = {
+  loading: {
+    title: 'views.release.states.loading.title',
+    description: 'views.release.states.loading.description',
+  },
+  error: {
+    title: 'views.release.states.error.title',
+    description: 'views.release.states.error.description',
+  },
+  empty: {
+    title: 'views.release.states.empty.title',
+    description: 'views.release.states.empty.description',
+  },
+} as const;
+
+type ReleaseStateKey = keyof typeof releaseStateMessages;
+
+const releaseState = computed(() => {
+  let state: ReleaseStateKey | null = null;
+  if (isLoading.value) {
+    state = 'loading';
+  } else if (hasLoadError.value) {
+    state = 'error';
+  } else if (sections.value.length === 0) {
+    state = 'empty';
+  }
+
+  if (state !== null) {
+    const messages = releaseStateMessages[state];
+
+    return {
+      title: t(messages.title),
+      description: t(messages.description),
+      state,
+    };
+  }
+
+  return null;
+});
 
 onMounted(async () => {
   try {
@@ -25,35 +67,15 @@ onMounted(async () => {
 <template>
   <section class="release-view">
     <Widget>
-      <template #sub-title>Builds und Changes</template>
-      <template #title>Release History</template>
-      <template #description>
-        Hier siehst du die veroffentlichten Versionen und die enthaltenen Anderungen.
-      </template>
+      <template #sub-title>{{ t('views.release.hero.subTitle') }}</template>
+      <template #title>{{ t('views.release.hero.title') }}</template>
+      <template #description>{{ t('views.release.hero.description') }}</template>
     </Widget>
 
-    <Widget v-if="isLoading" class="release-card" :show-actions="false" :compact="true" title-tag="h2">
-      <template #sub-title>Status</template>
-      <template #title>Release-Historie wird vorbereitet</template>
-      <p class="state-copy">
-        Die Daten werden beim Start oder Build generiert und stehen gleich hier bereit.
-      </p>
-    </Widget>
-
-    <Widget v-else-if="hasLoadError" class="release-card" :show-actions="false" :compact="true" title-tag="h2">
-      <template #sub-title>Status</template>
-      <template #title>Release-Historie aktuell nicht verfugbar</template>
-      <p class="state-copy">
-        Es konnten keine Release-Daten geladen werden. Beim nachsten Start oder Build werden sie neu erzeugt.
-      </p>
-    </Widget>
-
-    <Widget v-else-if="sections.length === 0" class="release-card" :show-actions="false" :compact="true" title-tag="h2">
-      <template #sub-title>Status</template>
-      <template #title>Noch keine Releases vorhanden</template>
-      <p class="state-copy">
-        Sobald Git-Tags vorhanden sind, erscheinen die Versionen automatisch in dieser Ansicht.
-      </p>
+    <Widget v-if="releaseState" class="release-card" :show-actions="false" :compact="true" title-tag="h2">
+      <template #sub-title>{{ t('views.release.states.status') }}</template>
+      <template #title>{{ releaseState.title }}</template>
+      <p class="state-copy">{{ releaseState.description }}</p>
     </Widget>
 
     <Widget v-for="section in sections" :key="`${section.version}-${section.date}`" class="release-card"

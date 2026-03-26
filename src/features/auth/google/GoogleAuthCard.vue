@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Widget from '@/components/Widget.vue';
 import ActionButton from '@/components/ActionButton.vue';
+import Message from '@/components/Message.vue';
 import { useGoogleAuthStore } from './store';
 
 type AuthCardMode = 'login' | 'status';
@@ -10,36 +12,36 @@ const props = withDefaults(defineProps<{ mode?: AuthCardMode }>(), {
   mode: 'login',
 });
 
+const { t } = useI18n();
 const googleAuthStore = useGoogleAuthStore();
 const isLoginMode = computed(() => props.mode === 'login');
 const statusLabel = computed(() => {
   if (!googleAuthStore.isConfigured) {
-    return 'Nicht konfiguriert';
+    return t('auth.google.status.notConfigured');
   }
 
   if (googleAuthStore.isAuthenticated) {
-    return 'Calendar Zugriff aktiv';
+    return t('auth.google.status.active');
   }
 
   switch (googleAuthStore.status) {
     case 'loading':
-      return 'Google OAuth lauft';
+      return t('auth.google.status.loading');
     case 'error':
-      return 'Fehler';
+      return t('auth.google.status.error');
     default:
-      return 'Bereit';
+      return t('auth.google.status.ready');
   }
 });
 
-const title = computed(() => (isLoginMode.value ? 'Google Calendar Login' : 'Google Calendar Status'));
+const title = computed(() =>
+  isLoginMode.value ? t('auth.google.title.login') : t('auth.google.title.status'));
 const description = computed(() =>
-  isLoginMode.value
-    ? 'Melde dich mit Google an und gib der App Zugriff auf deinen Kalender.'
-    : 'Der Zugriff auf deinen Google Kalender ist fur das Dashboard aktiv.',
-);
+  isLoginMode.value ? t('auth.google.description.login') : t('auth.google.description.status'));
 const loginLabel = computed(() =>
-  googleAuthStore.status === 'loading' ? 'Google OAuth wird geoffnet' : 'Mit Google Calendar verbinden',
-);
+  googleAuthStore.status === 'loading'
+    ? t('auth.google.action.opening')
+    : t('auth.google.action.connect'));
 </script>
 
 <template>
@@ -49,41 +51,39 @@ const loginLabel = computed(() =>
     <template #description>{{ description }}</template>
 
     <div class="auth-layout">
-      <p v-if="!googleAuthStore.isConfigured" class="auth-message auth-message--warning">
-        Trage `VITE_GOOGLE_CLIENT_ID` in der `.env` ein, damit der Login verfugbar ist.
-      </p>
+      <Message v-if="!googleAuthStore.isConfigured" variant="warning">
+        {{ t('auth.google.message.missingClientId') }}
+      </Message>
+
 
       <template v-else-if="isLoginMode">
         <div class="auth-actions">
-          <ActionButton
-            class="button-primary"
-            :disabled="googleAuthStore.status === 'loading'"
-            @click="googleAuthStore.signIn"
-          >
+          <ActionButton class="button-primary" :disabled="googleAuthStore.status === 'loading'"
+            @click="googleAuthStore.signIn">
             <template #label>{{ loginLabel }}</template>
           </ActionButton>
         </div>
 
         <p class="scope-copy">
-          Scope: `https://www.googleapis.com/auth/calendar`
+          {{ t('auth.google.message.scope') }}
         </p>
       </template>
 
       <template v-else>
-        <p class="auth-message auth-message--success" v-if="googleAuthStore.isAuthenticated">
-          Der OAuth-Zugriff fur Google Calendar ist aktiv.
-        </p>
+        <Message v-if="googleAuthStore.isAuthenticated" variant="success">
+          {{ t('auth.google.message.accessActive') }}
+        </Message>
 
         <div class="auth-actions">
           <ActionButton class="button-secondary" @click="googleAuthStore.signOut">
-            <template #label>Abmelden</template>
+            <template #label>{{ t('auth.google.action.logout') }}</template>
           </ActionButton>
         </div>
       </template>
 
-      <p v-if="googleAuthStore.errorMessage" class="auth-message auth-message--error">
+      <Message v-if="googleAuthStore.errorMessage" variant="error">
         {{ googleAuthStore.errorMessage }}
-      </p>
+      </Message>
     </div>
   </Widget>
 </template>
@@ -107,30 +107,5 @@ const loginLabel = computed(() =>
 .scope-copy {
   margin: 0;
   color: rgba(226, 232, 240, 0.72);
-}
-
-.auth-message {
-  margin: 0;
-  padding: 14px 16px;
-  border-radius: 18px;
-  line-height: 1.5;
-}
-
-.auth-message--warning {
-  color: #fef3c7;
-  background: rgba(120, 53, 15, 0.45);
-  border: 1px solid rgba(251, 191, 36, 0.28);
-}
-
-.auth-message--success {
-  color: #d1fae5;
-  background: rgba(6, 95, 70, 0.45);
-  border: 1px solid rgba(52, 211, 153, 0.28);
-}
-
-.auth-message--error {
-  color: #fee2e2;
-  background: rgba(127, 29, 29, 0.55);
-  border: 1px solid rgba(248, 113, 113, 0.35);
 }
 </style>

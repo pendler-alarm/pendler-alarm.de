@@ -1,5 +1,7 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
+import { translate } from '@/i18n';
+import { GOOGLE_CALENDAR_SCOPE, GOOGLE_IDENTITY_SCRIPT_SRC } from '@/utils/constants/api';
 
 type GoogleAuthStatus = 'idle' | 'loading' | 'authenticated' | 'error';
 
@@ -9,8 +11,6 @@ type PersistedSession = {
 };
 
 const STORAGE_KEY = 'google-calendar-auth';
-const GOOGLE_IDENTITY_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
-const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 
 type GoogleTokenResponse = {
   access_token?: string;
@@ -118,7 +118,7 @@ const loadGoogleIdentityScript = async (): Promise<void> => {
         existingScript.addEventListener('load', () => resolve(), { once: true });
         existingScript.addEventListener(
           'error',
-          () => reject(new Error('Google Identity script failed to load.')),
+          () => reject(new Error(translate('auth.google.error.scriptLoad'))),
           { once: true },
         );
         return;
@@ -138,7 +138,7 @@ const loadGoogleIdentityScript = async (): Promise<void> => {
       );
       script.addEventListener(
         'error',
-        () => reject(new Error('Google Identity script failed to load.')),
+        () => reject(new Error(translate('auth.google.error.scriptLoad'))),
         { once: true },
       );
       document.head.appendChild(script);
@@ -176,7 +176,7 @@ export const useGoogleAuthStore = defineStore('google-auth', () => {
   const initialize = async (): Promise<void> => {
     if (!isConfigured.value) {
       status.value = 'error';
-      errorMessage.value = 'VITE_GOOGLE_CLIENT_ID fehlt in der .env.';
+      errorMessage.value = translate('auth.google.error.missingClientId');
       return;
     }
 
@@ -193,7 +193,7 @@ export const useGoogleAuthStore = defineStore('google-auth', () => {
       const googleOauth2Api = window.google?.accounts.oauth2;
 
       if (!googleOauth2Api) {
-        throw new Error('Google OAuth API is not available.');
+        throw new Error(translate('auth.google.error.oauthApiUnavailable'));
       }
 
       googleClient = googleOauth2Api.initTokenClient({
@@ -208,7 +208,7 @@ export const useGoogleAuthStore = defineStore('google-auth', () => {
 
           if (!response.access_token) {
             status.value = 'error';
-            errorMessage.value = 'Google OAuth hat keinen Access Token geliefert.';
+            errorMessage.value = translate('auth.google.error.noAccessToken');
             return;
           }
 
@@ -229,8 +229,7 @@ export const useGoogleAuthStore = defineStore('google-auth', () => {
       status.value = isAuthenticated.value ? 'authenticated' : 'idle';
     } catch (error) {
       status.value = 'error';
-      errorMessage.value =
-        error instanceof Error ? error.message : 'Google Login konnte nicht initialisiert werden.';
+      errorMessage.value = error instanceof Error ? error.message : translate('auth.google.error.initFailed');
     }
   };
 

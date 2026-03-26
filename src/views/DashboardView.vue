@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import Widget from '@/components/Widget.vue';
 import GoogleAuthCard from '@/features/auth/google/GoogleAuthCard.vue';
 import { fetchUpcomingCalendarEvents, type GoogleCalendarEvent } from '@/features/auth/google/calendar-api';
 import { useGoogleAuthStore } from '@/features/auth/google/store';
 
+const { t } = useI18n();
 const router = useRouter();
 const googleAuthStore = useGoogleAuthStore();
 const events = ref<GoogleCalendarEvent[]>([]);
@@ -26,7 +28,7 @@ const loadEvents = async (): Promise<void> => {
     events.value = await fetchUpcomingCalendarEvents(googleAuthStore.accessToken);
   } catch (error) {
     events.value = [];
-    eventsError.value = error instanceof Error ? error.message : 'Kalendertermine konnten nicht geladen werden.';
+    eventsError.value = error instanceof Error ? error.message : t('views.dashboard.events.errorFallback');
   } finally {
     isLoadingEvents.value = false;
   }
@@ -56,24 +58,20 @@ onMounted(async () => {
 <template>
   <section class="dashboard-view">
     <Widget>
-      <template #sub-title>Dashboard</template>
-      <template #title>Kalender verbunden</template>
-      <template #description>
-        Du bist angemeldet und kannst jetzt auf den geschutzten Dashboard-Bereich wechseln.
-      </template>
+      <template #sub-title>{{ t('views.dashboard.hero.subTitle') }}</template>
+      <template #title>{{ t('views.dashboard.hero.title') }}</template>
+      <template #description>{{ t('views.dashboard.hero.description') }}</template>
     </Widget>
 
     <GoogleAuthCard mode="status" />
 
     <Widget class="calendar-events-card" :show-actions="false" :compact="true" title-tag="h2">
-      <template #sub-title>Google Calendar</template>
-      <template #title>Deine nachsten 3 Termine</template>
-      <template #description>
-        Die Liste wird aus deinem primaren Google Kalender geladen.
-      </template>
-
+      <template #sub-title>{{ t('views.dashboard.events.subTitle') }}</template>
+      <template #title>{{ t('views.dashboard.events.title') }}</template>
+      <template #description>{{ t('views.dashboard.events.description') }}</template>
+      <!-- STATE -->
       <p v-if="isLoadingEvents" class="state-copy">
-        Termine werden geladen...
+        {{ t('views.dashboard.events.loading') }}
       </p>
 
       <p v-else-if="eventsError" class="state-copy state-copy--error">
@@ -81,9 +79,10 @@ onMounted(async () => {
       </p>
 
       <p v-else-if="events.length === 0" class="state-copy">
-        Keine anstehenden Termine gefunden.
+        {{ t('views.dashboard.events.empty') }}
       </p>
 
+      <!-- RESULT -->
       <ul v-else class="event-list">
         <li v-for="event in events" :key="event.id" class="event-item">
           <strong>{{ event.summary }}</strong>
@@ -118,13 +117,13 @@ onMounted(async () => {
   gap: 4px;
   padding: 14px 16px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: var(--calendar-event-bg);
+  border: 1px solid var(--calendar-event-border);
 }
 
 .event-item span,
 .state-copy {
-  color: rgba(226, 232, 240, 0.72);
+  color: var(--calendar-state-empty);
 }
 
 .state-copy {
@@ -132,7 +131,7 @@ onMounted(async () => {
 }
 
 .state-copy--error {
-  color: #fecaca;
+  color: var(--calendar-state-error);
 }
 
 @media (max-width: 720px) {

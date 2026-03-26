@@ -25,11 +25,14 @@
     "prepare:release-meta": "TS_NODE_PROJECT=tsconfig.scripts.json node --no-warnings --loader ts-node/esm scripts/generate-release-meta.ts",
     "predev": "npm run prepare:release-meta",
     "prebuild": "npm run prepare:release-meta",
-    "pretype-check": "npm run prepare:release-meta"
+    "pretype-check": "npm run prepare:release-meta",
+    "check:i18n": "TS_NODE_PROJECT=tsconfig.scripts.json node --no-warnings --loader ts-node/esm scripts/check-i18n.ts",
+    "lint:i18n": "npm run check:i18n"
   },
   "dependencies": {
     "pinia": "^3.0.4",
     "vue": "^3.5.30",
+    "vue-i18n": "^11.3.0",
     "vue-router": "^5.0.3"
   },
   "devDependencies": {
