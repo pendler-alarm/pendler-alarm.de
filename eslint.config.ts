@@ -85,7 +85,7 @@ const i18nPlugin = {
           parserServices?: {
             defineTemplateBodyVisitor?: (
               templateBodyVisitor: Record<string, (node: { value?: string }) => void>,
-              scriptVisitor?: Record<string, never>,
+              scriptVisitor?: Record<string, (node: any) => void>,
             ) => Record<string, (node: { value?: string }) => void>;
           };
         };
