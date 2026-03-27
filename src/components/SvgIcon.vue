@@ -4,7 +4,7 @@
 
 <script lang="ts">
 const SVG_PATH = '../assets/svg';
-const svgFiles = import.meta.glob('../assets/svg/*.svg', {
+const svgFiles = import.meta.glob('../assets/svg/**/*.svg', {
   eager: true,
   import: 'default',
   query: '?raw',
@@ -64,5 +64,9 @@ export default {
 .svg-icon {
   display: inline-flex;
   line-height: 0;
+}
+
+.svg-icon :deep(svg) {
+  display: block;
 }
 </style>

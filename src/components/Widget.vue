@@ -66,9 +66,10 @@ export default {
       return Boolean(this.$slots['sub-title']?.().length);
     },
     iconName() {
-      const slot = this.$slots.icon?.();
-      const firstNode = slot?.[0];
-      const content = typeof firstNode?.children === 'string' ? firstNode.children : '';
+      const slot = this.$slots.icon?.() ?? [];
+      const content = slot
+        .map((node) => typeof node.children === 'string' ? node.children : '')
+        .join('');
 
       return content.trim();
     },
