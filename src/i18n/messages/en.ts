@@ -103,6 +103,8 @@ export const en = {
           title: '🚆 Matching connection',
           loading: 'Loading connection...',
           leaveAt: 'Leave at {time}',
+          notificationTitle: 'Leave now for {event}',
+          notificationBody: 'Best connection: leave at {time}.',
           onTime: 'On time',
           delayed: 'Delayed',
           duration: 'Travel: {value}',

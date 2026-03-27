@@ -34,8 +34,12 @@ const apiMetrics = ref(getApiMetrics());
 const lastConnectionRefreshAt = ref<string | null>(null);
 let loadSequence = 0;
 let refreshTimer: number | null = null;
+const reminderTimers = new Map<string, number>();
+const sentReminderKeys = new Set<string>();
 
 const refreshIntervalMs = 5 * 60_000;
+const reminderLeadTimeMs = 5 * 60_000;
+const notificationIconUrl = new URL('../assets/svg/logo.svg', import.meta.url).href;
 
 const apiTotal = computed(() => apiMetrics.value.googleCalendar + apiMetrics.value.motis);
 const expandedConnectionCount = computed(() => expandedConnections.value.size);
@@ -76,6 +80,119 @@ const compactLocationLabel = (value: string | null): string | null => {
 
   const uniqueParts = parts.filter((part, index) => parts.indexOf(part) === index);
   return uniqueParts.slice(0, 2).join(', ');
+};
+
+const clearReminderTimers = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  reminderTimers.forEach((timerId) => {
+    window.clearTimeout(timerId);
+  });
+  reminderTimers.clear();
+};
+
+const getReminderKey = (event: GoogleCalendarEvent): string | null => {
+  if (!event.connection?.departureIso) {
+    return null;
+  }
+
+  return `${event.id}:${event.connection.departureIso}`;
+};
+
+const showLeaveNotification = async (event: GoogleCalendarEvent): Promise<void> => {
+  if (typeof window === 'undefined' || !('Notification' in window) || !('serviceWorker' in navigator)) {
+    return;
+  }
+
+  const reminderKey = getReminderKey(event);
+  const connection = event.connection;
+  const departureIso = connection?.departureIso;
+
+  if (!connection || !reminderKey || !departureIso || sentReminderKeys.has(reminderKey) || Notification.permission !== 'granted') {
+    return;
+  }
+
+  const registration = await navigator.serviceWorker.ready;
+
+  registration.active?.postMessage({
+    type: 'SHOW_REMINDER_NOTIFICATION',
+    payload: {
+      title: t('views.dashboard.events.connection.notificationTitle', { event: event.summary }),
+      body: t('views.dashboard.events.connection.notificationBody', {
+        time: connection.departureTime,
+      }),
+      icon: notificationIconUrl,
+      tag: reminderKey,
+      url: window.location.pathname,
+    },
+  });
+
+  sentReminderKeys.add(reminderKey);
+};
+
+const ensureNotificationPermission = async (): Promise<boolean> => {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    return false;
+  }
+
+  if (Notification.permission === 'granted') {
+    return true;
+  }
+
+  if (Notification.permission === 'denied') {
+    return false;
+  }
+
+  return (await Notification.requestPermission()) === 'granted';
+};
+
+const scheduleConnectionReminders = async (): Promise<void> => {
+  clearReminderTimers();
+
+  if (typeof window === 'undefined' || events.value.length === 0) {
+    return;
+  }
+
+  const permissionGranted = await ensureNotificationPermission();
+
+  if (!permissionGranted) {
+    return;
+  }
+
+  const now = Date.now();
+
+  events.value.forEach((event) => {
+    const departureIso = event.connection?.departureIso;
+    const reminderKey = getReminderKey(event);
+
+    if (!departureIso || !reminderKey) {
+      return;
+    }
+
+    const departureTimeMs = new Date(departureIso).getTime();
+
+    if (Number.isNaN(departureTimeMs)) {
+      return;
+    }
+
+    const reminderAtMs = departureTimeMs - reminderLeadTimeMs;
+    const delayMs = reminderAtMs - now;
+
+    if (delayMs <= 0) {
+      if (departureTimeMs > now) {
+        void showLeaveNotification(event);
+      }
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      void showLeaveNotification(event);
+    }, delayMs);
+
+    reminderTimers.set(reminderKey, timerId);
+  });
 };
 
 const setConnectionLoading = (eventId: string, isLoading: boolean): void => {
@@ -128,7 +245,7 @@ const refreshConnections = async (eventIds?: string[]): Promise<void> => {
     return;
   }
 
-  const targetIds = eventIds ?? Array.from(expandedConnections.value);
+  const targetIds = eventIds ?? events.value.map((event) => event.id);
   if (targetIds.length === 0) {
     return;
   }
@@ -199,6 +316,7 @@ const loadConnections = async (
 };
 
 const resetDashboardState = (): void => {
+  clearReminderTimers();
   events.value = [];
   eventsError.value = '';
   currentLocation.value = null;
@@ -282,6 +400,8 @@ onBeforeUnmount(() => {
     window.clearInterval(refreshTimer);
     refreshTimer = null;
   }
+
+  clearReminderTimers();
 });
 
 watch(
@@ -297,6 +417,14 @@ watch(
     void loadEvents();
   },
   { immediate: true },
+);
+
+watch(
+  events,
+  () => {
+    void scheduleConnectionReminders();
+  },
+  { deep: true },
 );
 
 </script>

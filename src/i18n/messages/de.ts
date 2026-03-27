@@ -103,6 +103,8 @@ export const de = {
           title: '🚆 Passende Verbindung',
           loading: 'Verbindung wird geladen...',
           leaveAt: 'Losgehen um {time}',
+          notificationTitle: 'Jetzt los fur {event}',
+          notificationBody: 'Beste Verbindung: um {time} losgehen.',
           onTime: 'Pünktlich',
           delayed: 'Verspätet',
           duration: 'Fahrt: {value}',
