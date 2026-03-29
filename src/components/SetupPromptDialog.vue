@@ -16,36 +16,6 @@ const dismissed = ref(false);
 const isStandalone = ref(false);
 let permissionStatus: PermissionStatus | null = null;
 
-const copy = computed(() => {
-  const de = String(locale.value).startsWith('de');
-  return de ? {
-    eyebrow: 'App bereitmachen',
-    title: 'Installieren und Standort freigeben',
-    body: 'Hol dir Pendler Alarm als App und erlaube den Standort fur bessere Verbindungen.',
-    installTitle: 'PWA installieren',
-    installCopy: 'Schneller Zugriff direkt vom Startbildschirm.',
-    installAction: 'Jetzt installieren',
-    locationTitle: 'Standort freigeben',
-    locationCopy: 'Der aktuelle Startpunkt macht die Route genauer.',
-    locationRetry: 'Erneut versuchen',
-    locationAction: 'Standort freigeben',
-    later: 'Spater',
-    done: 'Erledigt',
-  } : {
-    eyebrow: 'Get set up',
-    title: 'Install and allow location',
-    body: 'Add Pendler Alarm as an app and allow location for better routes.',
-    installTitle: 'Install PWA',
-    installCopy: 'Faster access right from your home screen.',
-    installAction: 'Install now',
-    locationTitle: 'Allow location',
-    locationCopy: 'Your current starting point makes route timing more accurate.',
-    locationRetry: 'Try again',
-    locationAction: 'Allow location',
-    later: 'Later',
-    done: 'Done',
-  };
-});
 
 const showDialog = computed(() => {
   const needsInstall = !!deferredPrompt.value && !isStandalone.value;
