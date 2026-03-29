@@ -10,6 +10,15 @@ export const en = {
       de: 'DE',
       en: 'EN',
     },
+    serviceWorker: {
+      unsupported: 'Service worker unavailable',
+      registering: 'Service worker starting',
+      active: 'Service worker active',
+      updating: 'Service worker updating',
+      error: 'Service worker error',
+      online: 'Online',
+      offline: 'Offline',
+    },
   },
   auth: {
     google: {
@@ -155,6 +164,21 @@ export const en = {
     },
   },
   components: {
+    setupPrompt: {
+      eyebrow: 'Get set up',
+      title: 'Install and allow location',
+      body: 'Add Pendler Alarm as an app and allow location for better routes.',
+      installTitle: 'Install PWA',
+      installCopy: 'Faster access right from your home screen.',
+      installAction: 'Install now',
+      locationTitle: 'Allow location',
+      locationCopy: 'Your current starting point makes route timing more accurate.',
+      locationRetry: 'Try again',
+      locationAction: 'Allow location',
+      later: 'Later',
+      done: 'Done',
+    },
+    
     dashboard: {
       placeholder: 'Dashboard placeholder',
     },

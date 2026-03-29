@@ -10,6 +10,15 @@ export const de = {
       de: 'DE',
       en: 'EN',
     },
+    serviceWorker: {
+      unsupported: 'Service Worker nicht verfugbar',
+      registering: 'Service Worker wird gestartet',
+      active: 'Service Worker aktiv',
+      updating: 'Service Worker wird aktualisiert',
+      error: 'Service Worker Fehler',
+      online: 'Online',
+      offline: 'Offline',
+    },
   },
   auth: {
     google: {
@@ -155,6 +164,21 @@ export const de = {
     },
   },
   components: {
+    setupPrompt: {
+      eyebrow: 'App bereitmachen',
+      title: 'Installieren und Standort freigeben',
+      body: 'Hol dir Pendler Alarm als App und erlaube den Standort fur bessere Verbindungen.',
+      installTitle: 'PWA installieren',
+      installCopy: 'Schneller Zugriff direkt vom Startbildschirm.',
+      installAction: 'Jetzt installieren',
+      locationTitle: 'Standort freigeben',
+      locationCopy: 'Der aktuelle Startpunkt macht die Route genauer.',
+      locationRetry: 'Erneut versuchen',
+      locationAction: 'Standort freigeben',
+      later: 'Spater',
+      done: 'Erledigt',
+    },
+    
     dashboard: {
       placeholder: 'Dashboard Platzhalter',
     },
