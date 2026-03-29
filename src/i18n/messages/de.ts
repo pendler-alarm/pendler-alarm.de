@@ -191,6 +191,8 @@ export const de = {
       body: 'Installiere Pendler Alarm. Der Standort wird danach direkt angefragt, Benachrichtigungen per Klick.',
       installTitle: 'PWA installieren',
       installCopy: 'Nach der Installation wird der Standort direkt angefragt.',
+      installManualCopy: 'Wenn der Browser keinen Install-Button anbietet, offne das Browser-Menü und wahle Installieren oder App hinzufugen.',
+      installIosCopy: 'Auf iPhone oder iPad offne Teilen und wahle Zum Home-Bildschirm.',
       installAction: 'Jetzt installieren',
       notificationTitle: 'Push-Benachrichtigungen',
       notificationCopy: 'Aktiviere Push-Benachrichtigungen fur Erinnerungen zu deiner Fahrt.',

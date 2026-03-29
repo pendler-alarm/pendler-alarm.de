@@ -191,6 +191,8 @@ export const en = {
       body: 'Install Pendler Alarm. Location is requested right after that, notifications by explicit click.',
       installTitle: 'Install PWA',
       installCopy: 'Location is requested right after installation.',
+      installManualCopy: 'If the browser does not offer an install button, open the browser menu and choose Install app or Add to home screen.',
+      installIosCopy: 'On iPhone or iPad, open Share and choose Add to Home Screen.',
       installAction: 'Install now',
       notificationTitle: 'Push notifications',
       notificationCopy: 'Enable push notifications for trip reminders.',

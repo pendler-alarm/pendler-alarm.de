@@ -10,18 +10,20 @@ type InstallPromptEvent = Event & {
 type LocationState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupported';
 
 type NotificationState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupported';
+type InstallHelpMode = 'prompt' | 'ios' | 'manual';
 
 const { t } = useI18n();
 const deferredPrompt = ref<InstallPromptEvent | null>(null);
 const locationState = ref<LocationState>('unknown');
 const dismissed = ref(false);
 const isStandalone = ref(false);
+const installHelpMode = ref<InstallHelpMode>('manual');
 let permissionStatus: PermissionStatus | null = null;
 const notificationState = ref<NotificationState>('unknown');
 
 
 const showDialog = computed(() => {
-  const needsInstall = !!deferredPrompt.value && !isStandalone.value;
+  const needsInstall = !isStandalone.value;
   const needsNotification = isStandalone.value
     && notificationState.value !== 'granted'
     && notificationState.value !== 'unsupported';
@@ -33,6 +35,17 @@ const updateStandalone = (): void => {
   const nav = window.navigator as Navigator & { standalone?: boolean };
   // eslint-disable-next-line local-i18n/no-hardcoded-text
   isStandalone.value = window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true;
+};
+
+const detectInstallHelpMode = (): void => {
+  if (typeof window === 'undefined') {
+    installHelpMode.value = 'manual';
+    return;
+  }
+
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  const isIos = /iphone|ipad|ipod/.test(userAgent);
+  installHelpMode.value = isIos ? 'ios' : 'manual';
 };
 
 const syncLocationState = async (): Promise<void> => {
@@ -122,15 +135,18 @@ const triggerInstall = async (): Promise<void> => {
 const onBeforeInstallPrompt = (event: Event): void => {
   event.preventDefault();
   deferredPrompt.value = event as InstallPromptEvent;
+  installHelpMode.value = 'prompt';
 };
 
 const onInstalled = (): void => {
   deferredPrompt.value = null;
   updateStandalone();
+  detectInstallHelpMode();
 };
 
 onMounted(async () => {
   updateStandalone();
+  detectInstallHelpMode();
   if (typeof window !== 'undefined') {
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener);
     window.addEventListener('appinstalled', onInstalled);
@@ -158,10 +174,16 @@ onBeforeUnmount(() => {
       <p class="setup-body">{{ t('components.setupPrompt.body') }}</p>
 
       <div class="setup-grid">
-        <article v-if="deferredPrompt && !isStandalone" class="setup-panel">
+        <article v-if="!isStandalone" class="setup-panel">
           <strong>{{ t('components.setupPrompt.installTitle') }}</strong>
-          <p>{{ t('components.setupPrompt.installCopy') }}</p>
-          <button class="setup-button setup-button--primary" @click="triggerInstall">
+          <p v-if="installHelpMode === 'prompt'">{{ t('components.setupPrompt.installCopy') }}</p>
+          <p v-else-if="installHelpMode === 'ios'">{{ t('components.setupPrompt.installIosCopy') }}</p>
+          <p v-else>{{ t('components.setupPrompt.installManualCopy') }}</p>
+          <button
+            v-if="installHelpMode === 'prompt'"
+            class="setup-button setup-button--primary"
+            @click="triggerInstall"
+          >
             {{ t('components.setupPrompt.installAction') }}
           </button>
         </article>
