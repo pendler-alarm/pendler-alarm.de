@@ -66,18 +66,37 @@ self.addEventListener('message', (event) => {
 
   const { title, body, icon, tag, url } = event.data.payload ?? {};
 
-  event.waitUntil(
-    self.registration.showNotification(title ?? 'Pendler Alarm', {
-      body,
-      icon,
-      badge: icon,
-      tag,
-      data: {
-        url: url ?? '/',
-        version: appVersion,
-      },
-    }),
-  );
+  event.waitUntil((async () => {
+    try {
+      await self.registration.showNotification(title ?? 'Pendler Alarm', {
+        body,
+        icon,
+        badge: icon,
+        tag,
+        data: {
+          url: url ?? '/',
+          version: appVersion,
+        },
+      });
+
+      await broadcastToClients({
+        type: 'DEBUG_NOTIFICATION_RESULT',
+        payload: {
+          ok: true,
+          tag: tag ?? null,
+        },
+      });
+    } catch (error) {
+      await broadcastToClients({
+        type: 'DEBUG_NOTIFICATION_RESULT',
+        payload: {
+          ok: false,
+          tag: tag ?? null,
+          error: error instanceof Error ? error.message : 'Unknown notification error',
+        },
+      });
+    }
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {

@@ -13,6 +13,7 @@ type ServiceWorkerState = {
   workerVersion: string | null;
 };
 
+ 
 const SERVICE_WORKER_URL = '/service-worker.js';
 const RELOAD_FLAG_KEY = 'pendler-alarm.service-worker-reload';
 
@@ -135,7 +136,9 @@ const registerServiceWorker = async (): Promise<ServiceWorkerRegistration | null
   } catch (error) {
     state.phase = 'error';
     state.isActive = false;
+    // eslint-disable-next-line local-i18n/no-hardcoded-text
     state.error = error instanceof Error ? error.message : 'Unknown service worker error';
+    // eslint-disable-next-line local-i18n/no-hardcoded-text
     console.error('Service worker registration failed.', error);
     return null;
   }

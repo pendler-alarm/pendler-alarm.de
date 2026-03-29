@@ -85,7 +85,7 @@ const i18nPlugin = {
           parserServices?: {
             defineTemplateBodyVisitor?: (
               templateBodyVisitor: Record<string, (node: { value?: string }) => void>,
-              scriptVisitor?: Record<string, (node: any) => void>,
+              scriptVisitor?: Record<string, (node: unknown) => void>,
             ) => Record<string, (node: { value?: string }) => void>;
           };
         };
@@ -114,50 +114,63 @@ const i18nPlugin = {
         };
 
         const scriptVisitor = {
-          Literal(node: {
-            parent?: { type?: string; callee?: { type?: string; name?: string; property?: { name?: string } } };
-            value?: unknown;
-          }) {
-            if (typeof node.value !== 'string') {
+          Literal(node: unknown) {
+            const literal = node as {
+              parent?: {
+                type?: string;
+                callee?: {
+                  type?: string;
+                  name?: string;
+                  property?: { name?: string };
+                };
+              };
+              value?: unknown;
+            };
+
+            if (typeof literal.value !== 'string') {
               return;
             }
 
             if (
-              node.parent?.type === 'ImportDeclaration'
-              || node.parent?.type === 'ExportAllDeclaration'
-              || node.parent?.type === 'ExportNamedDeclaration'
-              || isTranslationCall(node.parent)
+              literal.parent?.type === 'ImportDeclaration'
+              || literal.parent?.type === 'ExportAllDeclaration'
+              || literal.parent?.type === 'ExportNamedDeclaration'
+              || isTranslationCall(literal.parent)
             ) {
               return;
             }
 
-            if (!isSuspiciousScriptText(node.value)) {
+            if (!isSuspiciousScriptText(literal.value)) {
               return;
             }
 
-            context.report({ node, messageId: 'hardcodedText' });
+            context.report({ node: literal, messageId: 'hardcodedText' });
           },
-          TemplateLiteral(node: {
-            parent?: { type?: string; callee?: { type?: string; name?: string; property?: { name?: string } } };
-            expressions?: unknown[];
-            quasis?: Array<{ value?: { cooked?: string | null } }>;
-          }) {
-            if ((node.expressions?.length ?? 0) > 0 || isTranslationCall(node.parent)) {
+          TemplateLiteral(node: unknown) {
+            const templateLiteral = node as {
+              parent?: { type?: string; callee?: { type?: string; name?: string; property?: { name?: string } } };
+              expressions?: unknown[];
+              quasis?: Array<{ value?: { cooked?: string | null } }>;
+            };
+
+            if ((templateLiteral.expressions?.length ?? 0) > 0 || isTranslationCall(templateLiteral.parent)) {
               return;
             }
 
-            const literalValue = node.quasis?.[0]?.value?.cooked ?? '';
+            const literalValue = templateLiteral.quasis?.[0]?.value?.cooked ?? '';
 
             if (!isSuspiciousScriptText(literalValue)) {
               return;
             }
 
-            context.report({ node, messageId: 'hardcodedText' });
+            context.report({ node: templateLiteral, messageId: 'hardcodedText' });
           },
         };
 
-        return context.sourceCode?.parserServices?.defineTemplateBodyVisitor
-          ? context.sourceCode.parserServices.defineTemplateBodyVisitor(templateBodyVisitor, scriptVisitor)
+        const defineTemplateBodyVisitor = context.sourceCode?.parserServices?.defineTemplateBodyVisitor;
+
+        return defineTemplateBodyVisitor
+          ? defineTemplateBodyVisitor(templateBodyVisitor, scriptVisitor)
           : scriptVisitor;
       },
     },
@@ -192,6 +205,14 @@ export default defineConfigWithVueTs(
     },
     rules: {
       'local-i18n/no-hardcoded-text': 'error',
+    },
+  },
+
+  {
+    name: 'app/vue-rules',
+    files: ['**/*.vue'],
+    rules: {
+      'vue/multi-word-component-names': 'off',
     },
   },
 

@@ -10,6 +10,7 @@ export const de = {
       de: 'DE',
       en: 'EN',
     },
+    logo: 'logo',
     serviceWorker: {
       unsupported: 'Service Worker nicht verfugbar',
       registering: 'Service Worker wird gestartet',
@@ -108,8 +109,15 @@ export const de = {
         currentLocation: {
           title: '🏠 Dein aktueller Startpunkt',
         },
+        notification: {
+          title: 'Benachrichtigungsstatus',
+          statusPrompt: 'Browser-Benachrichtigungen sind noch nicht freigegeben.',
+          statusDenied: 'Browser-Benachrichtigungen sind blockiert. Bitte gib sie in den Browser-Einstellungen frei.',
+          statusGrantedBrowser: 'Browser-Benachrichtigungen sind erlaubt. In der installierten PWA gelten zusatzlich deine System-Einstellungen.',
+          statusGrantedStandalone: 'Benachrichtigungen sind fur die PWA erlaubt. Wenn trotzdem nichts sichtbar erscheint, prufe die System-Benachrichtigungseinstellungen deines Gerats.',
+          systemHint: 'Hinweis: Browser und PWA konnen Benachrichtigungen technisch auslosen, auch wenn Banner oder Pop-ups vom Betriebssystem unterdruckt werden.',
+        },
         connection: {
-          title: '🚆 Passende Verbindung',
           loading: 'Verbindung wird geladen...',
           leaveAt: 'Losgehen um {time}',
           notificationTitle: 'Jetzt los fur {event}',
@@ -131,6 +139,19 @@ export const de = {
           motis: 'MOTIS Aufrufe',
           lastRefresh: 'Letzte Aktualisierung',
           openConnections: 'Offene Verbindungen: {count}',
+          triggerFirstEventNotification: 'Test-Benachrichtigung fur 1. Event',
+          notificationTitle: 'Debug: Erinnerung fur {event}',
+          notificationBody: 'Test-Benachrichtigung ausgelost. Referenzzeit: {time}.',
+          feedback: {
+            unsupported: 'Benachrichtigungen oder Service Worker werden in diesem Browser nicht unterstutzt.',
+            noEvents: 'Es ist aktuell kein Event geladen, fur das eine Test-Benachrichtigung gesendet werden kann.',
+            permissionDenied: 'Benachrichtigungen sind nicht erlaubt. Bitte gib die Berechtigung im Browser frei.',
+            workerUnavailable: 'Der Service Worker ist noch nicht aktiv. Lade die Seite neu und versuche es erneut.',
+            sent: 'Test-Benachrichtigung wurde an den Service Worker gesendet. Warte auf Ruckmeldung.',
+            displayed: 'Die Benachrichtigung wurde vom Browser angenommen und ausgelost.',
+            failed: 'Die Benachrichtigung konnte vom Browser nicht angezeigt werden.',
+            failedWithReason: 'Die Benachrichtigung konnte nicht angezeigt werden: {reason}',
+          },
         },
       },
     },
@@ -166,21 +187,21 @@ export const de = {
   components: {
     setupPrompt: {
       eyebrow: 'App bereitmachen',
-      title: 'Installieren und Standort freigeben',
-      body: 'Hol dir Pendler Alarm als App und erlaube den Standort fur bessere Verbindungen.',
+      title: 'App installieren',
+      body: 'Installiere Pendler Alarm. Der Standort wird danach direkt angefragt, Benachrichtigungen per Klick.',
       installTitle: 'PWA installieren',
-      installCopy: 'Schneller Zugriff direkt vom Startbildschirm.',
+      installCopy: 'Nach der Installation wird der Standort direkt angefragt.',
       installAction: 'Jetzt installieren',
-      locationTitle: 'Standort freigeben',
-      locationCopy: 'Der aktuelle Startpunkt macht die Route genauer.',
-      locationRetry: 'Erneut versuchen',
-      locationAction: 'Standort freigeben',
+      notificationTitle: 'Push-Benachrichtigungen',
+      notificationCopy: 'Aktiviere Push-Benachrichtigungen fur Erinnerungen zu deiner Fahrt.',
+      notificationAction: 'Benachrichtigungen erlauben',
+      notificationRetry: 'Erneut versuchen',
+      notificationGranted: 'Benachrichtigungen sind aktiviert.',
       later: 'Spater',
-      done: 'Erledigt',
+    },
+    widget: {
+      api: 'API',
     },
     
-    dashboard: {
-      placeholder: 'Dashboard Platzhalter',
-    },
   },
 } as const;

@@ -10,6 +10,7 @@ export const en = {
       de: 'DE',
       en: 'EN',
     },
+    logo: 'logo',
     serviceWorker: {
       unsupported: 'Service worker unavailable',
       registering: 'Service worker starting',
@@ -108,8 +109,15 @@ export const en = {
         currentLocation: {
           title: '🏠 Your current starting point',
         },
+        notification: {
+          title: 'Notification status',
+          statusPrompt: 'Browser notifications are not enabled yet.',
+          statusDenied: 'Browser notifications are blocked. Please enable them in your browser settings.',
+          statusGrantedBrowser: 'Browser notifications are allowed. In the installed PWA, your system settings still apply.',
+          statusGrantedStandalone: 'Notifications are allowed for the PWA. If nothing is visibly shown, check your device system notification settings.',
+          systemHint: 'Note: the browser and PWA can trigger notifications technically even when banners or pop-ups are suppressed by the operating system.',
+        },
         connection: {
-          title: '🚆 Matching connection',
           loading: 'Loading connection...',
           leaveAt: 'Leave at {time}',
           notificationTitle: 'Leave now for {event}',
@@ -131,6 +139,19 @@ export const en = {
           motis: 'MOTIS calls',
           lastRefresh: 'Last refresh',
           openConnections: 'Open connections: {count}',
+          triggerFirstEventNotification: 'Test notification for 1st event',
+          notificationTitle: 'Debug: reminder for {event}',
+          notificationBody: 'Test notification triggered. Reference time: {time}.',
+          feedback: {
+            unsupported: 'Notifications or service workers are not supported in this browser.',
+            noEvents: 'There is currently no event loaded that can be used for a test notification.',
+            permissionDenied: 'Notifications are not allowed. Please enable the permission in your browser.',
+            workerUnavailable: 'The service worker is not active yet. Reload the page and try again.',
+            sent: 'The test notification was sent to the service worker. Waiting for confirmation.',
+            displayed: 'The notification was accepted and triggered by the browser.',
+            failed: 'The browser could not display the notification.',
+            failedWithReason: 'The notification could not be displayed: {reason}',
+          },
         },
       },
     },
@@ -166,21 +187,21 @@ export const en = {
   components: {
     setupPrompt: {
       eyebrow: 'Get set up',
-      title: 'Install and allow location',
-      body: 'Add Pendler Alarm as an app and allow location for better routes.',
+      title: 'Install the app',
+      body: 'Install Pendler Alarm. Location is requested right after that, notifications by explicit click.',
       installTitle: 'Install PWA',
-      installCopy: 'Faster access right from your home screen.',
+      installCopy: 'Location is requested right after installation.',
       installAction: 'Install now',
-      locationTitle: 'Allow location',
-      locationCopy: 'Your current starting point makes route timing more accurate.',
-      locationRetry: 'Try again',
-      locationAction: 'Allow location',
+      notificationTitle: 'Push notifications',
+      notificationCopy: 'Enable push notifications for trip reminders.',
+      notificationAction: 'Enable notifications',
+      notificationRetry: 'Try again',
+      notificationGranted: 'Notifications are enabled.',
       later: 'Later',
-      done: 'Done',
+    },
+    widget: {
+      api: 'API',
     },
     
-    dashboard: {
-      placeholder: 'Dashboard placeholder',
-    },
   },
 } as const;

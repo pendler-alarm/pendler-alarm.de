@@ -49,6 +49,7 @@ type EnrichedLocation = {
 const DEFAULT_TIME_ZONE = 'Europe/Berlin';
 const MAX_CONNECTION_OPTIONS = 3;
 const CONNECTION_SEARCH_WINDOW_MINUTES = 120;
+const CALENDAR_FETCH_RESULTS = String(Math.max(Number(MAX_EVENT_RESULTS) * 4, Number(MAX_EVENT_RESULTS)));
 
 const getEventTimeZone = (start?: { timeZone?: string }): string => start?.timeZone?.trim() || DEFAULT_TIME_ZONE;
 
@@ -180,6 +181,20 @@ const createBaseEvent = async (
   };
 };
 
+const isUpcomingEvent = (event: GoogleCalendarEvent): boolean => {
+  if (!event.startIso) {
+    return false;
+  }
+
+  const startTimeMs = new Date(event.startIso).getTime();
+
+  if (Number.isNaN(startTimeMs)) {
+    return false;
+  }
+
+  return startTimeMs >= Date.now();
+};
+
 export const fetchEventConnection = async (
   origin: ResolvedLocation | null | undefined,
   event: GoogleCalendarEvent,
@@ -240,7 +255,7 @@ export const fetchUpcomingCalendarEvents = async (
   accessToken: string,
 ): Promise<GoogleCalendarEvent[]> => {
   const params = new URLSearchParams({
-    maxResults: MAX_EVENT_RESULTS,
+    maxResults: CALENDAR_FETCH_RESULTS,
     orderBy: 'startTime',
     singleEvents: 'true',
     timeMin: new Date().toISOString(),
@@ -262,9 +277,11 @@ export const fetchUpcomingCalendarEvents = async (
   }
 
   const data = (await response.json()) as CalendarApiResponse;
-  const upcomingEvents = (data.items ?? []).slice(0, Number(MAX_EVENT_RESULTS));
+  const upcomingEvents = (data.items ?? []).slice(0, Number(CALENDAR_FETCH_RESULTS));
 
-  return Promise.all(
+  const normalizedEvents = await Promise.all(
     upcomingEvents.map((event, index) => createBaseEvent(event, index)),
   );
+
+  return normalizedEvents.filter(isUpcomingEvent).slice(0, Number(MAX_EVENT_RESULTS));
 };

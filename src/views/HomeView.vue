@@ -24,7 +24,7 @@ watch(
 <template>
   <div class="home">
     <Widget>
-      <template #icon>logo</template>
+      <template #icon>{{ t('app.logo') }}</template>
       <template #title>{{ t('views.home.title') }}</template>
       <template #description>{{ t('views.home.description') }}</template>
     </Widget>

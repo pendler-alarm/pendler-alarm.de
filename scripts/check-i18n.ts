@@ -38,6 +38,9 @@ const allowedHardcodedValues = new Set([
   'error',
   'logo',
   '?raw',
+  '/service-worker.js',
+  'Unknown service worker error',
+  'Service worker registration failed.',
   '/api/releases.json',
 ]);
 

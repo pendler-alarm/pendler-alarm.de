@@ -19,7 +19,7 @@
       <slot name="actions">
         <ActionButton>
           <template #label>
-            API
+            {{ ('components.widget.api') }}
           </template>
         </ActionButton>
       </slot>

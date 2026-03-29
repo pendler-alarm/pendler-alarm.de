@@ -9,23 +9,29 @@ type InstallPromptEvent = Event & {
 
 type LocationState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupported';
 
+type NotificationState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupported';
+
 const { t } = useI18n();
 const deferredPrompt = ref<InstallPromptEvent | null>(null);
 const locationState = ref<LocationState>('unknown');
 const dismissed = ref(false);
 const isStandalone = ref(false);
 let permissionStatus: PermissionStatus | null = null;
+const notificationState = ref<NotificationState>('unknown');
 
 
 const showDialog = computed(() => {
   const needsInstall = !!deferredPrompt.value && !isStandalone.value;
-  const needsLocation = locationState.value === 'prompt' || locationState.value === 'denied';
-  return !dismissed.value && (needsInstall || needsLocation);
+  const needsNotification = isStandalone.value
+    && notificationState.value !== 'granted'
+    && notificationState.value !== 'unsupported';
+  return !dismissed.value && (needsInstall || needsNotification);
 });
 
 const updateStandalone = (): void => {
   if (typeof window === 'undefined') return;
   const nav = window.navigator as Navigator & { standalone?: boolean };
+  // eslint-disable-next-line local-i18n/no-hardcoded-text
   isStandalone.value = window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true;
 };
 
@@ -70,12 +76,46 @@ const requestLocation = async (): Promise<void> => {
   });
 };
 
+const syncNotificationState = (): void => {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    notificationState.value = 'unsupported';
+    return;
+  }
+
+  if (Notification.permission === 'granted') {
+    notificationState.value = 'granted';
+  } else if (Notification.permission === 'denied') {
+    notificationState.value = 'denied';
+  } else {
+    notificationState.value = 'prompt';
+  }
+};
+
+const requestNotificationPermission = async (): Promise<void> => {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    notificationState.value = 'unsupported';
+    return;
+  }
+
+  const result = await Notification.requestPermission();
+  notificationState.value = result === 'granted'
+    ? 'granted'
+    : result === 'denied'
+      ? 'denied'
+      : 'prompt';
+};
+
+
 const triggerInstall = async (): Promise<void> => {
   if (!deferredPrompt.value) return;
   await deferredPrompt.value.prompt();
   const { outcome } = await deferredPrompt.value.userChoice;
   if (outcome === 'accepted') {
     deferredPrompt.value = null;
+    if (locationState.value !== 'granted' && locationState.value !== 'unsupported') {
+      await requestLocation();
+    }
+
   }
 };
 
@@ -96,6 +136,7 @@ onMounted(async () => {
     window.addEventListener('appinstalled', onInstalled);
   }
   await syncLocationState();
+  syncNotificationState();
 });
 
 onBeforeUnmount(() => {
@@ -125,17 +166,31 @@ onBeforeUnmount(() => {
           </button>
         </article>
 
-        <article v-if="locationState === 'prompt' || locationState === 'denied'" class="setup-panel">
-          <strong>{{ t('components.setupPrompt.locationTitle') }}</strong>
-          <p>{{ t('components.setupPrompt.locationCopy') }}</p>
-          <button class="setup-button setup-button--warm" @click="requestLocation">
-            {{ locationState === 'denied' ? t('components.setupPrompt.locationRetry') : t('components.setupPrompt.locationAction') }}
+        <article v-if="notificationState !== 'unsupported'" class="setup-panel">
+          <strong>{{ t('components.setupPrompt.notificationTitle') }}</strong>
+          <p>
+            {{
+              notificationState === 'granted'
+                ? t('components.setupPrompt.notificationGranted')
+                : t('components.setupPrompt.notificationCopy')
+            }}
+          </p>
+          <button
+            v-if="notificationState !== 'granted'"
+            class="setup-button setup-button--warm"
+            @click="requestNotificationPermission"
+          >
+            {{
+              notificationState === 'denied'
+                ? t('components.setupPrompt.notificationRetry')
+                : t('components.setupPrompt.notificationAction')
+            }}
           </button>
         </article>
+
       </div>
 
       <div class="setup-footer">
-        <span v-if="!deferredPrompt && locationState === 'granted'">{{ t('components.setupPrompt.done') }}</span>
         <button class="setup-button" @click="dismissed = true">{{ t('components.setupPrompt.later') }}</button>
       </div>
     </section>
@@ -150,7 +205,11 @@ onBeforeUnmount(() => {
 .setup-body { margin: 10px 0 0; color: rgba(23, 32, 51, 0.82); }
 .setup-grid { display: grid; gap: 12px; margin-top: 18px; }
 .setup-panel { padding: 14px; border-radius: 18px; background: rgba(15, 23, 42, 0.06); }
-.setup-panel p { margin: 6px 0 12px; color: rgba(23, 32, 51, 0.78); }
+.setup-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.setup-label { font-weight: 600; color: rgba(23, 32, 51, 0.86); }
+.setup-select { border: 1px solid rgba(15,23,42,0.18); border-radius: 999px; padding: 6px 12px; background: #fff; font-weight: 600; color: #172033; }
+.setup-select:disabled { opacity: 0.6; cursor: not-allowed; }
+.setup-helper { margin: 0; font-size: 0.9rem; color: rgba(23, 32, 51, 0.7); }
 .setup-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 18px; }
 .setup-button { border: 1px solid rgba(15,23,42,0.12); border-radius: 999px; padding: 10px 14px; font-weight: 700; background: rgba(255,255,255,0.72); color: #172033; cursor: pointer; }
 .setup-button--primary { background: linear-gradient(135deg, #ff5a36, #ff0b0b); color: #fff; border-color: transparent; }

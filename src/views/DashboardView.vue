@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
+import Message from '@/components/Message.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 import Widget from '@/components/Widget.vue';
 import ConnectionCard from '@/components/connection/ConnectionCard.vue';
@@ -20,32 +21,138 @@ import { getApiMetrics } from '@/lib/api-metrics';
 import { getCachedConnection, storeConnection } from '@/lib/connection-cache';
 import { useGoogleAuthStore } from '@/features/auth/google/store';
 
+type NotificationUiState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupported';
+
 const { t, locale } = useI18n();
 const router = useRouter();
 const googleAuthStore = useGoogleAuthStore();
 const events = ref<GoogleCalendarEvent[]>([]);
 const currentLocation = ref<ResolvedLocation | null>(null);
 const currentLocationError = ref('');
+const notificationState = ref<NotificationUiState>('unknown');
+const isStandalone = ref(false);
 const isLoadingEvents = ref(false);
 const eventsError = ref('');
 const loadingConnectionsById = ref<Record<string, boolean>>({});
 const expandedConnections = ref<Set<string>>(new Set());
 const apiMetrics = ref(getApiMetrics());
 const lastConnectionRefreshAt = ref<string | null>(null);
+const debugNotificationFeedback = ref<{
+  variant: 'success' | 'error' | 'warning';
+  message: string;
+} | null>(null);
+const currentDebugNotificationTag = ref<string | null>(null);
 let loadSequence = 0;
 let refreshTimer: number | null = null;
 const reminderTimers = new Map<string, number>();
 const sentReminderKeys = new Set<string>();
 
 const refreshIntervalMs = 5 * 60_000;
-const reminderLeadTimeMs = 5 * 60_000;
+const REMINDER_LEAD_KEY = 'pendler-alarm.reminder-lead-minutes';
+const DEFAULT_LEAD_MINUTES = 30;
+const getReminderLeadTimeMs = (): number => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_LEAD_MINUTES * 60_000;
+  }
+  const raw = window.localStorage.getItem(REMINDER_LEAD_KEY);
+  const minutes = Number(raw);
+  const normalized = Number.isFinite(minutes) && minutes > 0 ? minutes : DEFAULT_LEAD_MINUTES;
+  return normalized * 60_000;
+};
 const notificationIconUrl = new URL('../assets/svg/logo.svg', import.meta.url).href;
 
 const apiTotal = computed(() => apiMetrics.value.googleCalendar + apiMetrics.value.motis);
 const expandedConnectionCount = computed(() => expandedConnections.value.size);
+const notificationStatusVariant = computed<'success' | 'warning' | 'error'>(() => {
+  if (notificationState.value === 'granted') {
+    return 'success';
+  }
+
+  if (notificationState.value === 'denied') {
+    return 'error';
+  }
+
+  return 'warning';
+});
+const notificationStatusMessage = computed(() => {
+  if (notificationState.value === 'granted') {
+    return isStandalone.value
+      ? t('views.dashboard.events.notification.statusGrantedStandalone')
+      : t('views.dashboard.events.notification.statusGrantedBrowser');
+  }
+
+  if (notificationState.value === 'denied') {
+    return t('views.dashboard.events.notification.statusDenied');
+  }
+
+  return t('views.dashboard.events.notification.statusPrompt');
+});
 
 const updateApiMetrics = (): void => {
   apiMetrics.value = getApiMetrics();
+};
+
+const setDebugNotificationFeedback = (
+  variant: 'success' | 'error' | 'warning',
+  message: string,
+): void => {
+  debugNotificationFeedback.value = { variant, message };
+};
+
+const syncNotificationState = (): void => {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    notificationState.value = 'unsupported';
+    return;
+  }
+
+  if (Notification.permission === 'granted') {
+    notificationState.value = 'granted';
+    return;
+  }
+
+  if (Notification.permission === 'denied') {
+    notificationState.value = 'denied';
+    return;
+  }
+
+  notificationState.value = 'prompt';
+};
+
+const syncStandaloneState = (): void => {
+  if (typeof window === 'undefined') {
+    isStandalone.value = false;
+    return;
+  }
+
+  const nav = window.navigator as Navigator & { standalone?: boolean };
+  // eslint-disable-next-line local-i18n/no-hardcoded-text
+  isStandalone.value = window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true;
+};
+
+const handleServiceWorkerMessage = (event: MessageEvent): void => {
+  if (event.data?.type !== 'DEBUG_NOTIFICATION_RESULT') {
+    return;
+  }
+
+  const { ok, error, tag } = event.data.payload ?? {};
+
+  if (!currentDebugNotificationTag.value || tag !== currentDebugNotificationTag.value) {
+    return;
+  }
+
+  currentDebugNotificationTag.value = null;
+
+  if (ok) {
+    setDebugNotificationFeedback('success', t('views.dashboard.events.debug.feedback.displayed'));
+    return;
+  }
+
+  setDebugNotificationFeedback(
+    'error',
+    error
+      ? t('views.dashboard.events.debug.feedback.failedWithReason', { reason: error })
+      : t('views.dashboard.events.debug.feedback.failed'),
+  );
 };
 
 const formatTimestamp = (value: string | null): string | null => {
@@ -148,6 +255,56 @@ const ensureNotificationPermission = async (): Promise<boolean> => {
   return (await Notification.requestPermission()) === 'granted';
 };
 
+const triggerDebugNotification = async (): Promise<void> => {
+  debugNotificationFeedback.value = null;
+  currentDebugNotificationTag.value = null;
+
+  if (typeof window === 'undefined' || !('Notification' in window) || !('serviceWorker' in navigator)) {
+    setDebugNotificationFeedback('error', t('views.dashboard.events.debug.feedback.unsupported'));
+    return;
+  }
+
+  const firstEvent = events.value[0];
+
+  if (!firstEvent) {
+    setDebugNotificationFeedback('warning', t('views.dashboard.events.debug.feedback.noEvents'));
+    return;
+  }
+
+  const permissionGranted = await ensureNotificationPermission();
+
+  if (!permissionGranted) {
+    setDebugNotificationFeedback('warning', t('views.dashboard.events.debug.feedback.permissionDenied'));
+    return;
+  }
+
+  const reminderKey = getReminderKey(firstEvent) ?? `${firstEvent.id}:debug`;
+  const notificationTag = `${reminderKey}:debug`;
+  const registration = await navigator.serviceWorker.ready;
+  const activeWorker = registration.active ?? navigator.serviceWorker.controller;
+
+  if (!activeWorker) {
+    setDebugNotificationFeedback('error', t('views.dashboard.events.debug.feedback.workerUnavailable'));
+    return;
+  }
+
+  currentDebugNotificationTag.value = notificationTag;
+  activeWorker.postMessage({
+    type: 'SHOW_REMINDER_NOTIFICATION',
+    payload: {
+      title: t('views.dashboard.events.debug.notificationTitle', { event: firstEvent.summary }),
+      body: t('views.dashboard.events.debug.notificationBody', {
+        time: firstEvent.connection?.departureTime ?? firstEvent.startLabel,
+      }),
+      icon: notificationIconUrl,
+      tag: notificationTag,
+      url: window.location.pathname,
+    },
+  });
+
+  setDebugNotificationFeedback('success', t('views.dashboard.events.debug.feedback.sent'));
+};
+
 const scheduleConnectionReminders = async (): Promise<void> => {
   clearReminderTimers();
 
@@ -155,13 +312,13 @@ const scheduleConnectionReminders = async (): Promise<void> => {
     return;
   }
 
-  const permissionGranted = await ensureNotificationPermission();
-
-  if (!permissionGranted) {
+  if (Notification.permission !== 'granted') {
     return;
   }
 
+
   const now = Date.now();
+  const leadTimeMs = getReminderLeadTimeMs();
 
   events.value.forEach((event) => {
     const departureIso = event.connection?.departureIso;
@@ -177,7 +334,7 @@ const scheduleConnectionReminders = async (): Promise<void> => {
       return;
     }
 
-    const reminderAtMs = departureTimeMs - reminderLeadTimeMs;
+    const reminderAtMs = departureTimeMs - leadTimeMs;
     const delayMs = reminderAtMs - now;
 
     if (delayMs <= 0) {
@@ -388,10 +545,18 @@ const toggleConnection = (eventId: string): void => {
 };
 
 onMounted(() => {
+  syncStandaloneState();
+  syncNotificationState();
+
   if (typeof window !== 'undefined') {
     refreshTimer = window.setInterval(() => {
       void refreshConnections();
     }, refreshIntervalMs);
+    window.addEventListener('focus', syncNotificationState);
+  }
+
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
   }
 });
 
@@ -399,6 +564,14 @@ onBeforeUnmount(() => {
   if (refreshTimer !== null && typeof window !== 'undefined') {
     window.clearInterval(refreshTimer);
     refreshTimer = null;
+  }
+
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('focus', syncNotificationState);
+  }
+
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
   }
 
   clearReminderTimers();
@@ -448,6 +621,23 @@ watch(
         </span>
       </template>
       <template #description>{{ t('views.dashboard.events.description') }}</template>
+
+      <Message
+        v-if="notificationState !== 'unsupported'"
+        class="notification-status"
+        :variant="notificationStatusVariant"
+      >
+        <strong>{{ t('views.dashboard.events.notification.title') }}</strong>
+        {{ notificationStatusMessage }}
+      </Message>
+
+      <Message
+        v-if="notificationState === 'granted'"
+        class="notification-system-hint"
+        variant="warning"
+      >
+        {{ t('views.dashboard.events.notification.systemHint') }}
+      </Message>
 
       <div v-if="currentLocation?.address || currentLocation?.coordinates" class="current-location">
         <strong>{{ t('views.dashboard.events.currentLocation.title') }}</strong>
@@ -514,6 +704,13 @@ watch(
             <span class="debug-bubble">{{ apiTotal }}</span>
           </summary>
           <div class="debug-body">
+            <Message
+              v-if="debugNotificationFeedback"
+              class="debug-feedback"
+              :variant="debugNotificationFeedback.variant"
+            >
+              {{ debugNotificationFeedback.message }}
+            </Message>
             <div class="debug-row">
               {{ t('views.dashboard.events.debug.googleCalendar') }}: {{ apiMetrics.googleCalendar }}
             </div>
@@ -526,6 +723,13 @@ watch(
             <div class="debug-row">
               {{ t('views.dashboard.events.debug.openConnections', { count: expandedConnectionCount }) }}
             </div>
+            <button
+              class="debug-action"
+              :disabled="events.length === 0"
+              @click="triggerDebugNotification"
+            >
+              {{ t('views.dashboard.events.debug.triggerFirstEventNotification') }}
+            </button>
           </div>
         </details>
       </div>
@@ -542,6 +746,32 @@ watch(
 
 .calendar-events-card {
   margin-top: 20px;
+}
+
+.notification-status,
+.notification-system-hint {
+  margin-bottom: 16px;
+}
+
+.debug-feedback {
+  margin-bottom: 12px;
+}
+
+.debug-action {
+  margin-top: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 700;
+  color: #172033;
+  background: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+}
+
+.debug-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .calendar-title {
