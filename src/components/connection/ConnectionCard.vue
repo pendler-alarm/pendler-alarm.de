@@ -155,7 +155,7 @@ const toggleExpanded = (): void => {
             <span v-for="segment in connection.segments" :key="segment.id" class="connection-badge">
               <SvgIcon class="connection-badge-icon" :icon="getProductIcon(segment.productType)"
                 :fallback-text="getProductFallbackLabel(segment.productType)" :width="44" :height="20" />
-              X<span class="connection-badge-label">{{ segment.lineLabel }}</span>
+              <span class="connection-badge-label">{{ segment.lineLabel }}</span>
             </span>
           </template>
           <template v-else v-for="mode in connection.transportModes" :key="mode">
