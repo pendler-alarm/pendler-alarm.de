@@ -12,6 +12,7 @@ export type ConnectionProductType =
   | 'bus'
   | 'tram'
   | 'train'
+  | 'ferry'
   | 'walk';
 
 export type ConnectionSegment = {
