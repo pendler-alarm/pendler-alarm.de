@@ -13,22 +13,31 @@ type NotificationState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsuppor
 type InstallHelpMode = 'prompt' | 'ios' | 'manual';
 
 const { t } = useI18n();
+const SETUP_VISIT_KEY = 'pendler-alarm.setup-visit-seen';
 const deferredPrompt = ref<InstallPromptEvent | null>(null);
 const locationState = ref<LocationState>('unknown');
 const dismissed = ref(false);
+const hasVisitedBefore = ref(false);
 const isStandalone = ref(false);
 const installHelpMode = ref<InstallHelpMode>('manual');
 let permissionStatus: PermissionStatus | null = null;
 const notificationState = ref<NotificationState>('unknown');
 
 
-const showDialog = computed(() => {
-  const needsInstall = !isStandalone.value;
-  const needsNotification = isStandalone.value
+const showInstallPanel = computed(() =>
+  !isStandalone.value
+  && hasVisitedBefore.value,
+);
+
+const showNotificationPanel = computed(() =>
+  isStandalone.value
     && notificationState.value !== 'granted'
-    && notificationState.value !== 'unsupported';
-  return !dismissed.value && (needsInstall || needsNotification);
-});
+    && notificationState.value !== 'unsupported',
+);
+
+const showDialog = computed(() =>
+  !dismissed.value && (showInstallPanel.value || showNotificationPanel.value),
+);
 
 const updateStandalone = (): void => {
   if (typeof window === 'undefined') return;
@@ -142,12 +151,15 @@ const onInstalled = (): void => {
   deferredPrompt.value = null;
   updateStandalone();
   detectInstallHelpMode();
+  dismissed.value = true;
 };
 
 onMounted(async () => {
   updateStandalone();
   detectInstallHelpMode();
   if (typeof window !== 'undefined') {
+    hasVisitedBefore.value = window.localStorage.getItem(SETUP_VISIT_KEY) === 'true';
+    window.localStorage.setItem(SETUP_VISIT_KEY, 'true');
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener);
     window.addEventListener('appinstalled', onInstalled);
   }
@@ -174,7 +186,7 @@ onBeforeUnmount(() => {
       <p class="setup-body">{{ t('components.setupPrompt.body') }}</p>
 
       <div class="setup-grid">
-        <article v-if="!isStandalone" class="setup-panel">
+        <article v-if="showInstallPanel" class="setup-panel">
           <strong>{{ t('components.setupPrompt.installTitle') }}</strong>
           <p v-if="installHelpMode === 'prompt'">{{ t('components.setupPrompt.installCopy') }}</p>
           <p v-else-if="installHelpMode === 'ios'">{{ t('components.setupPrompt.installIosCopy') }}</p>
@@ -188,7 +200,7 @@ onBeforeUnmount(() => {
           </button>
         </article>
 
-        <article v-if="notificationState !== 'unsupported'" class="setup-panel">
+        <article v-if="showNotificationPanel" class="setup-panel">
           <strong>{{ t('components.setupPrompt.notificationTitle') }}</strong>
           <p>
             {{

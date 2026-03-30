@@ -5,6 +5,28 @@ import { createPlaceQuery, type Coordinates } from './location-service';
 
 export type ConnectionStatus = 'on_time' | 'delayed';
 
+export type ConnectionProductType =
+  | 'regio'
+  | 'sbahn'
+  | 'ubahn'
+  | 'bus'
+  | 'tram'
+  | 'train'
+  | 'walk';
+
+export type ConnectionSegment = {
+  id: string;
+  productType: ConnectionProductType;
+  productLabel: string;
+  lineLabel: string;
+  fromStop: string;
+  toStop: string;
+  departureIso: string | null;
+  departureTime: string;
+  arrivalIso: string | null;
+  arrivalTime: string;
+};
+
 export type ConnectionOption = {
   departureIso: string | null;
   departureTime: string;
@@ -15,6 +37,7 @@ export type ConnectionOption = {
   durationMinutes: number | null;
   transferCount: number;
   transportModes: string[];
+  segments: ConnectionSegment[];
   status: ConnectionStatus;
 };
 
@@ -74,6 +97,10 @@ type MotisPlanResponse =
 
 const nonTransitModes = new Set(['WALK', 'BIKE', 'CAR', 'CAR_PARKING', 'CAR_DROPOFF', 'RENTAL']);
 const DEFAULT_MAX_CONNECTIONS = 3;
+const tramLinePattern = /\b(tram|str|m\d{1,2})\b/i;
+const sbahnPattern = /\bs\s?\d{1,2}\b/i;
+const ubahnPattern = /\bu\s?\d{1,2}\b/i;
+const regioPattern = /\b(re|rb|ire|mrx|merz|ag|erx)\b/i;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
@@ -94,6 +121,12 @@ const formatModeName = (mode?: string): string =>
 const getLegLabel = (leg: MotisLeg): string =>
   leg.displayName?.trim()
   || leg.routeShortName?.trim()
+  || leg.headsign?.trim()
+  || formatModeName(leg.mode);
+
+const getLegLineLabel = (leg: MotisLeg): string =>
+  leg.routeShortName?.trim()
+  || leg.displayName?.trim()
   || leg.headsign?.trim()
   || formatModeName(leg.mode);
 
@@ -178,6 +211,84 @@ const getTransportModes = (itinerary: MotisItinerary): string[] => {
   return uniqueLabels(legs.map(getLegLabel).filter(Boolean));
 };
 
+const getStopName = (value?: string): string =>
+  value?.trim() || translate('calendar.connection.stopUnknown');
+
+const getProductType = (leg: MotisLeg): ConnectionProductType => {
+  const mode = leg.mode?.toUpperCase().trim() ?? '';
+  const label = getLegLineLabel(leg);
+
+  if (mode == 'SUBWAY' || ubahnPattern.test(label)) {
+    return 'ubahn';
+  }
+
+  if (mode == 'TRAM' || mode == 'LIGHT_RAIL' || tramLinePattern.test(label)) {
+    return 'tram';
+  }
+
+  if (mode == 'BUS' || mode == 'COACH') {
+    return 'bus';
+  }
+
+  if (mode == 'RAIL') {
+    if (sbahnPattern.test(label)) {
+      return 'sbahn';
+    }
+
+    if (regioPattern.test(label)) {
+      return 'regio';
+    }
+
+    return 'train';
+  }
+
+  return 'walk';
+};
+
+const getProductLabel = (type: ConnectionProductType): string => {
+  switch (type) {
+    case 'sbahn':
+      return 'S-Bahn';
+    case 'ubahn':
+      return 'U-Bahn';
+    case 'bus':
+      return 'Bus';
+    case 'tram':
+      return 'Tram';
+    case 'regio':
+      return 'Regio';
+    case 'train':
+      return 'Bahn';
+    default:
+      return 'Weg';
+  }
+};
+
+const getSegments = (itinerary: MotisItinerary): ConnectionSegment[] => {
+  const legs = Array.isArray(itinerary.legs) ? itinerary.legs : [];
+
+  return legs
+    .filter((leg) => !nonTransitModes.has(leg.mode ?? ''))
+    .map((leg, index) => {
+      const departureIso = leg.departure ?? leg.from?.departure ?? null;
+      const arrivalIso = leg.arrival ?? leg.to?.arrival ?? null;
+      const productType = getProductType(leg);
+
+      return {
+        id: `${productType}-${index}-${departureIso ?? arrivalIso ?? 'segment'}`,
+        productType,
+        productLabel: getProductLabel(productType),
+        lineLabel: getLegLineLabel(leg),
+        fromStop: getStopName(leg.from?.name),
+        toStop: getStopName(leg.to?.name),
+        departureIso,
+        departureTime: formatTime(departureIso ?? undefined),
+        arrivalIso,
+        arrivalTime: formatTime(arrivalIso ?? undefined),
+      };
+    });
+};
+
 const getDurationMinutes = (departure?: string, arrival?: string): number | null => {
   if (!departure || !arrival) {
     return null;
@@ -241,17 +352,19 @@ const toConnectionOption = (itinerary: MotisItinerary): ConnectionOption => {
   const lastLeg = getLastLeg(itinerary);
   const departureIso = getDepartureIso(itinerary, firstLeg) ?? null;
   const arrivalIso = getArrivalIso(itinerary, lastLeg) ?? null;
+  const segments = getSegments(itinerary);
 
   return {
     departureIso,
     departureTime: formatTime(departureIso ?? undefined),
     arrivalIso,
     arrivalTime: formatTime(arrivalIso ?? undefined),
-    fromStop: firstLeg?.from?.name?.trim() || translate('calendar.connection.stopUnknown'),
-    toStop: lastLeg?.to?.name?.trim() || translate('calendar.connection.stopUnknown'),
+    fromStop: getStopName(firstLeg?.from?.name),
+    toStop: getStopName(lastLeg?.to?.name),
     durationMinutes: getDurationMinutes(departureIso ?? undefined, arrivalIso ?? undefined),
     transferCount: getTransferCount(itinerary),
     transportModes: getTransportModes(itinerary),
+    segments,
     status: getStatus(itinerary, firstLeg, lastLeg),
   };
 };

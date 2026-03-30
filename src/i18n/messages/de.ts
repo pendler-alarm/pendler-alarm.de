@@ -126,6 +126,7 @@ export const de = {
           delayed: 'Verspätet',
           duration: 'Fahrt: {value}',
           transfers: 'Umstiege: {count}',
+          route: 'Route',
           buffer: '{count} Min. bis zum Termin',
           arrivesTooLate: '{count} Min. nach Terminbeginn',
           earlierOptions: '1-2 frühere Verbindungen',
@@ -187,8 +188,8 @@ export const de = {
   components: {
     setupPrompt: {
       eyebrow: 'App bereitmachen',
-      title: 'App installieren',
-      body: 'Installiere Pendler Alarm. Der Standort wird danach direkt angefragt, Benachrichtigungen per Klick.',
+      title: 'App einrichten',
+      body: 'Nutze Pendler Alarm direkt im Browser oder installiere die App spater. Benachrichtigungen aktivierst du per Klick.',
       installTitle: 'PWA installieren',
       installCopy: 'Nach der Installation wird der Standort direkt angefragt.',
       installManualCopy: 'Wenn der Browser keinen Install-Button anbietet, offne das Browser-Menü und wahle Installieren oder App hinzufugen.',
