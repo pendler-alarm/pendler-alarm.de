@@ -1,0 +1,288 @@
+<script setup lang="ts">
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+import type { SharingStation, SharingSuggestion } from '@/features/sharing/sharing-service';
+
+const props = withDefaults(defineProps<{
+  suggestion: SharingSuggestion;
+  compact?: boolean;
+}>(), {
+  compact: false,
+});
+
+const { t } = useI18n();
+
+const availabilityVariant = computed<'success' | 'warning'>(() =>
+  props.suggestion.originStation && props.suggestion.destinationStation ? 'success' : 'warning',
+);
+
+const primaryStation = computed<SharingStation | null>(() =>
+  props.suggestion.originStation ?? props.suggestion.destinationStation ?? null,
+);
+
+const formatDistance = (meters: number): string => {
+  if (meters >= 1000) {
+    return `${(meters / 1000).toFixed(meters >= 10_000 ? 0 : 1)} km`;
+  }
+
+  return `${String(meters)} m`;
+};
+
+const getStationAvailability = (station: SharingStation, type: 'pickup' | 'dropoff'): string => {
+  if (type === 'pickup') {
+    if (typeof station.bikesAvailable === 'number') {
+      return t('views.dashboard.events.sharing.bikesAvailable', { count: station.bikesAvailable });
+    }
+
+    return t('views.dashboard.events.sharing.availabilityUnknown');
+  }
+
+  if (typeof station.docksAvailable === 'number') {
+    return t('views.dashboard.events.sharing.docksAvailable', { count: station.docksAvailable });
+  }
+
+  return station.isFreeFloating
+    ? t('views.dashboard.events.sharing.flexibleDropoff')
+    : t('views.dashboard.events.sharing.availabilityUnknown');
+};
+
+const getMapEmbedUrl = (station: SharingStation | null): string | null => {
+  if (!station) {
+    return null;
+  }
+
+  const deltaLat = 0.006;
+  const deltaLon = 0.012;
+  const params = new URLSearchParams({
+    bbox: `${station.lon - deltaLon},${station.lat - deltaLat},${station.lon + deltaLon},${station.lat + deltaLat}`,
+    layer: 'mapnik',
+    marker: `${station.lat},${station.lon}`,
+  });
+
+  return `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
+};
+</script>
+
+<template>
+  <section class="sharing-card" :class="[
+    `sharing-card--${availabilityVariant}`,
+    { 'sharing-card--compact': compact },
+  ]">
+    <div class="sharing-card-body">
+      <div class="sharing-copy-block">
+        <div class="sharing-card-header">
+          <div>
+            <span class="sharing-pill">🚲 {{ suggestion.providerLabel }}</span>
+            <strong class="sharing-title">{{ t('views.dashboard.events.sharing.title') }}</strong>
+          </div>
+          <span class="sharing-distance">
+            {{ t('views.dashboard.events.sharing.tripDistance', { value: formatDistance(suggestion.tripDistanceMeters) }) }}
+          </span>
+        </div>
+
+        <p class="sharing-copy">
+          {{
+            t('views.dashboard.events.sharing.withinThreshold', {
+              current: formatDistance(suggestion.tripDistanceMeters),
+              max: formatDistance(suggestion.maxTripDistanceMeters),
+            })
+          }}
+        </p>
+
+        <div class="sharing-grid">
+          <div class="sharing-column">
+            <span class="sharing-label">{{ t('views.dashboard.events.sharing.pickup') }}</span>
+            <template v-if="suggestion.originStation">
+              <strong>{{ suggestion.originStation.name }}</strong>
+              <span>{{ formatDistance(suggestion.originStation.distanceMeters) }}</span>
+              <span>{{ getStationAvailability(suggestion.originStation, 'pickup') }}</span>
+            </template>
+            <span v-else class="sharing-empty">
+              {{ t('views.dashboard.events.sharing.noPickupNearby') }}
+            </span>
+          </div>
+
+          <div class="sharing-column">
+            <span class="sharing-label">{{ t('views.dashboard.events.sharing.dropoff') }}</span>
+            <template v-if="suggestion.destinationStation">
+              <strong>{{ suggestion.destinationStation.name }}</strong>
+              <span>{{ formatDistance(suggestion.destinationStation.distanceMeters) }}</span>
+              <span>{{ getStationAvailability(suggestion.destinationStation, 'dropoff') }}</span>
+            </template>
+            <span v-else class="sharing-empty">
+              {{ t('views.dashboard.events.sharing.noDropoffNearby') }}
+            </span>
+          </div>
+        </div>
+
+        <p class="sharing-footnote">
+          {{
+            t('views.dashboard.events.sharing.searchRadius', {
+              value: formatDistance(suggestion.stationSearchRadiusMeters),
+            })
+          }}
+        </p>
+      </div>
+
+      <div v-if="getMapEmbedUrl(primaryStation)" class="sharing-map-shell">
+        <iframe
+          class="sharing-map"
+          :src="getMapEmbedUrl(primaryStation) ?? undefined"
+          :title="t('views.dashboard.events.sharing.title')"
+          loading="lazy"
+          referrerpolicy="no-referrer-when-downgrade"
+        />
+      </div>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.sharing-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.96);
+  color: #111827;
+}
+
+.sharing-card--warning {
+  border-color: rgba(217, 119, 6, 0.22);
+  background: linear-gradient(180deg, rgba(255, 251, 235, 0.98), rgba(255, 247, 237, 0.96));
+}
+
+.sharing-card--success {
+  border-color: rgba(22, 163, 74, 0.2);
+  background: linear-gradient(180deg, rgba(240, 253, 244, 0.98), rgba(240, 249, 255, 0.96));
+}
+
+.sharing-card--compact {
+  padding: 12px;
+}
+
+.sharing-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.sharing-copy-block {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sharing-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.sharing-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sharing-title,
+.sharing-label,
+.sharing-distance,
+.sharing-copy,
+.sharing-footnote,
+.sharing-column span,
+.sharing-column strong {
+  color: #111827;
+}
+
+.sharing-title {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.sharing-distance,
+.sharing-copy,
+.sharing-footnote,
+.sharing-column span,
+.sharing-column strong {
+  font-size: 0.84rem;
+}
+
+.sharing-copy,
+.sharing-footnote {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.sharing-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sharing-column {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.sharing-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.76;
+}
+
+.sharing-empty {
+  opacity: 0.75;
+}
+
+.sharing-map-shell {
+  min-width: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #fff;
+}
+
+.sharing-map {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 132px;
+  border: 0;
+}
+
+@media (max-width: 720px) {
+  .sharing-card-body,
+  .sharing-card-header,
+  .sharing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sharing-card-header {
+    display: grid;
+  }
+
+  .sharing-map {
+    min-height: 116px;
+  }
+}
+</style>

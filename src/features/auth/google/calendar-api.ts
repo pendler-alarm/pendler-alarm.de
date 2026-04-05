@@ -7,6 +7,7 @@ import {
   type Coordinates,
   type ResolvedLocation,
 } from '@/features/motis/location-service';
+import type { SharingSuggestion } from '@/features/sharing/sharing-service';
 import { GOOGLE_API_CALENDAR_EVENTS } from '@/utils/constants/api';
 import { MAX_EVENT_RESULTS } from '@/utils/constants/const';
 
@@ -23,6 +24,8 @@ export type GoogleCalendarEvent = {
   connection: ConnectionSummary | null;
   connectionError: string | null;
   connectionFetchedAt: string | null;
+  sharingSuggestion: SharingSuggestion | null;
+  sharingError: string | null;
 };
 
 type CalendarApiEvent = {
@@ -178,6 +181,8 @@ const createBaseEvent = async (
     connection: null,
     connectionError: null,
     connectionFetchedAt: null,
+    sharingSuggestion: null,
+    sharingError: null,
   };
 };
 

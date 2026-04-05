@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import SvgIcon from '@/components/SvgIcon.vue';
+import SharingOptionCard from '@/components/connection/SharingOptionCard.vue';
 import type {
   ConnectionOption,
   ConnectionProductType,
@@ -12,6 +13,7 @@ import {
   formatConnectionDuration,
   getConnectionLeadLabel,
 } from '@/components/connection/connection-utils';
+import type { SharingSuggestion } from '@/features/sharing/sharing-service';
 
 const props = defineProps<{
   connection: ConnectionSummary;
@@ -19,6 +21,7 @@ const props = defineProps<{
   eventStartIso?: string | null;
   lastUpdatedIso?: string | null;
   expanded?: boolean;
+  sharingSuggestion?: SharingSuggestion | null;
 }>();
 
 const emit = defineEmits<{
@@ -244,6 +247,13 @@ const toggleExpanded = (): void => {
           </li>
         </ul>
       </div>
+
+      <SharingOptionCard
+        v-if="sharingSuggestion"
+        class="connection-sharing-inline"
+        :suggestion="sharingSuggestion"
+        :compact="true"
+      />
 
       <p v-if="formattedUpdatedAt" class="connection-updated">
         {{ t('views.dashboard.events.connection.updatedAt', { time: formattedUpdatedAt }) }}
@@ -585,6 +595,10 @@ const toggleExpanded = (): void => {
   font-size: 0.85rem;
   color: #4b5563;
   overflow-wrap: anywhere;
+}
+
+.connection-sharing-inline {
+  margin-top: 4px;
 }
 
 .connection-updated {

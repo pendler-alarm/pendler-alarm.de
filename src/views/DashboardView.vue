@@ -6,6 +6,7 @@ import Message from '@/components/Message.vue';
 import SvgIcon from '@/components/SvgIcon.vue';
 import Widget from '@/components/Widget.vue';
 import ConnectionCard from '@/components/connection/ConnectionCard.vue';
+import SharingOptionCard from '@/components/connection/SharingOptionCard.vue';
 import GoogleAuthCard from '@/features/auth/google/GoogleAuthCard.vue';
 import {
   fetchEventConnection,
@@ -17,15 +18,70 @@ import {
   getCurrentResolvedLocation,
   type ResolvedLocation,
 } from '@/features/motis/location-service';
+import {
+  findSharingSuggestion,
+  getDefaultSharingPreferences,
+  type SharingPreferences,
+  type SharingProviderId,
+} from '@/features/sharing/sharing-service';
 import { getApiMetrics } from '@/lib/api-metrics';
 import { getCachedConnection, storeConnection } from '@/lib/connection-cache';
 import { useGoogleAuthStore } from '@/features/auth/google/store';
 
 type NotificationUiState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupported';
 
+const refreshIntervalMs = 5 * 60_000;
+const REMINDER_LEAD_KEY = 'pendler-alarm.reminder-lead-minutes';
+const SHARING_PREFERENCES_KEY = 'pendler-alarm.sharing-preferences';
+const DEFAULT_LEAD_MINUTES = 30;
+const defaultSharingPreferences = getDefaultSharingPreferences();
+
+const loadStoredSharingPreferences = (): SharingPreferences => {
+  if (typeof window === 'undefined') {
+    return defaultSharingPreferences;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(SHARING_PREFERENCES_KEY);
+    if (!raw) {
+      return defaultSharingPreferences;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<SharingPreferences> | null;
+    if (!parsed || typeof parsed !== 'object') {
+      return defaultSharingPreferences;
+    }
+
+    return {
+      providerId: (parsed.providerId as SharingProviderId | undefined) ?? defaultSharingPreferences.providerId,
+      shortTripDistanceKm: typeof parsed.shortTripDistanceKm === 'number'
+        ? parsed.shortTripDistanceKm
+        : defaultSharingPreferences.shortTripDistanceKm,
+      stationSearchRadiusMeters: typeof parsed.stationSearchRadiusMeters === 'number'
+        ? parsed.stationSearchRadiusMeters
+        : defaultSharingPreferences.stationSearchRadiusMeters,
+      customProviderLabel: parsed.customProviderLabel?.trim() || defaultSharingPreferences.customProviderLabel,
+      customGbfsUrl: parsed.customGbfsUrl?.trim() || defaultSharingPreferences.customGbfsUrl,
+    };
+  } catch {
+    return defaultSharingPreferences;
+  }
+};
+
+const getReminderLeadTimeMs = (): number => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_LEAD_MINUTES * 60_000;
+  }
+  const raw = window.localStorage.getItem(REMINDER_LEAD_KEY);
+  const minutes = Number(raw);
+  const normalized = Number.isFinite(minutes) && minutes > 0 ? minutes : DEFAULT_LEAD_MINUTES;
+  return normalized * 60_000;
+};
+
 const { t, locale } = useI18n();
 const router = useRouter();
 const googleAuthStore = useGoogleAuthStore();
+const initialSharingPreferences = loadStoredSharingPreferences();
 const events = ref<GoogleCalendarEvent[]>([]);
 const currentLocation = ref<ResolvedLocation | null>(null);
 const currentLocationError = ref('');
@@ -42,27 +98,36 @@ const debugNotificationFeedback = ref<{
   message: string;
 } | null>(null);
 const currentDebugNotificationTag = ref<string | null>(null);
+const sharingProviderId = ref<SharingProviderId>(initialSharingPreferences.providerId);
+const sharingShortTripDistanceKm = ref<number>(initialSharingPreferences.shortTripDistanceKm);
+const sharingStationSearchRadiusMeters = ref<number>(initialSharingPreferences.stationSearchRadiusMeters);
+const sharingCustomProviderLabel = ref<string>(initialSharingPreferences.customProviderLabel);
+const sharingCustomGbfsUrl = ref<string>(initialSharingPreferences.customGbfsUrl);
 let loadSequence = 0;
 let refreshTimer: number | null = null;
 const reminderTimers = new Map<string, number>();
 const sentReminderKeys = new Set<string>();
-
-const refreshIntervalMs = 5 * 60_000;
-const REMINDER_LEAD_KEY = 'pendler-alarm.reminder-lead-minutes';
-const DEFAULT_LEAD_MINUTES = 30;
-const getReminderLeadTimeMs = (): number => {
-  if (typeof window === 'undefined') {
-    return DEFAULT_LEAD_MINUTES * 60_000;
-  }
-  const raw = window.localStorage.getItem(REMINDER_LEAD_KEY);
-  const minutes = Number(raw);
-  const normalized = Number.isFinite(minutes) && minutes > 0 ? minutes : DEFAULT_LEAD_MINUTES;
-  return normalized * 60_000;
-};
 const notificationIconUrl = new URL('../assets/svg/logo.svg', import.meta.url).href;
 
 const apiTotal = computed(() => apiMetrics.value.googleCalendar + apiMetrics.value.motis);
 const expandedConnectionCount = computed(() => expandedConnections.value.size);
+const sharingProviderOptions = computed(() => [
+  { value: 'disabled', label: t('views.dashboard.events.sharing.providers.disabled') },
+  { value: 'nextbike', label: t('views.dashboard.events.sharing.providers.nextbike') },
+  { value: 'custom', label: t('views.dashboard.events.sharing.providers.custom') },
+]);
+const currentSharingProviderLabel = computed(() =>
+  sharingProviderOptions.value.find((provider) => provider.value === sharingProviderId.value)?.label
+  ?? t('views.dashboard.events.sharing.providers.disabled'),
+);
+const sharingPreferences = computed<SharingPreferences>(() => ({
+  providerId: sharingProviderId.value,
+  shortTripDistanceKm: sharingShortTripDistanceKm.value,
+  stationSearchRadiusMeters: sharingStationSearchRadiusMeters.value,
+  customProviderLabel: sharingCustomProviderLabel.value,
+  customGbfsUrl: sharingCustomGbfsUrl.value,
+}));
+const isCustomSharingProvider = computed(() => sharingProviderId.value === 'custom');
 const notificationStatusVariant = computed<'success' | 'warning' | 'error'>(() => {
   if (notificationState.value === 'granted') {
     return 'success';
@@ -187,6 +252,14 @@ const compactLocationLabel = (value: string | null): string | null => {
 
   const uniqueParts = parts.filter((part, index) => parts.indexOf(part) === index);
   return uniqueParts.slice(0, 2).join(', ');
+};
+
+const persistSharingPreferences = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(SHARING_PREFERENCES_KEY, JSON.stringify(sharingPreferences.value));
 };
 
 const clearReminderTimers = (): void => {
@@ -316,7 +389,6 @@ const scheduleConnectionReminders = async (): Promise<void> => {
     return;
   }
 
-
   const now = Date.now();
   const leadTimeMs = getReminderLeadTimeMs();
 
@@ -397,6 +469,32 @@ const loadCurrentLocation = async (): Promise<ResolvedLocation | null> => {
   }
 };
 
+const refreshSharingSuggestions = async (eventIds?: string[]): Promise<void> => {
+  const targetIds = eventIds ?? events.value.map((event) => event.id);
+  if (targetIds.length === 0) {
+    return;
+  }
+
+  await Promise.all(targetIds.map(async (eventId) => {
+    const event = events.value.find((item) => item.id === eventId);
+
+    if (!event) {
+      return;
+    }
+
+    const { suggestion, error } = await findSharingSuggestion(
+      currentLocation.value?.coordinates,
+      event.locationCoordinates,
+      sharingPreferences.value,
+    );
+
+    updateEvent(event.id, {
+      sharingSuggestion: suggestion,
+      sharingError: error,
+    });
+  }));
+};
+
 const refreshConnections = async (eventIds?: string[]): Promise<void> => {
   if (!googleAuthStore.isAuthenticated || !currentLocation.value) {
     return;
@@ -434,6 +532,7 @@ const refreshConnections = async (eventIds?: string[]): Promise<void> => {
     }
   }));
 
+  await refreshSharingSuggestions(targetIds);
   lastConnectionRefreshAt.value = new Date().toISOString();
   updateApiMetrics();
 };
@@ -469,6 +568,33 @@ const loadConnections = async (
 
     setConnectionLoading(event.id, false);
     updateApiMetrics();
+  }));
+};
+
+const loadSharingSuggestions = async (
+  nextEvents: GoogleCalendarEvent[],
+  origin: ResolvedLocation | null,
+  sequence: number,
+): Promise<void> => {
+  await Promise.all(nextEvents.map(async (event) => {
+    if (sequence !== loadSequence) {
+      return;
+    }
+
+    const { suggestion, error } = await findSharingSuggestion(
+      origin?.coordinates,
+      event.locationCoordinates,
+      sharingPreferences.value,
+    );
+
+    if (sequence !== loadSequence) {
+      return;
+    }
+
+    updateEvent(event.id, {
+      sharingSuggestion: suggestion,
+      sharingError: error,
+    });
   }));
 };
 
@@ -517,7 +643,10 @@ const loadEvents = async (): Promise<void> => {
       return;
     }
 
-    await loadConnections(nextEvents, origin, sequence);
+    await Promise.all([
+      loadConnections(nextEvents, origin, sequence),
+      loadSharingSuggestions(nextEvents, origin, sequence),
+    ]);
   } catch (error) {
     if (sequence !== loadSequence) {
       return;
@@ -600,6 +729,14 @@ watch(
   { deep: true },
 );
 
+watch(
+  sharingPreferences,
+  () => {
+    persistSharingPreferences();
+    void refreshSharingSuggestions();
+  },
+  { deep: true },
+);
 </script>
 
 <template>
@@ -645,7 +782,68 @@ watch(
         <span v-if="currentLocation?.coordinates">🧭 {{ formatCoordinates(currentLocation.coordinates) }}</span>
       </div>
 
-      <p v-else-if="currentLocationError && !isLoadingEvents" class="state-copy">
+      <details class="sharing-settings">
+        <summary class="sharing-settings-summary">
+          <div class="sharing-settings-header">
+            <strong>{{ t('views.dashboard.events.sharing.settingsTitle') }}</strong>
+            <span>
+              {{ t('views.dashboard.events.sharing.settingsSummary', { provider: currentSharingProviderLabel, distanceKm: sharingShortTripDistanceKm, radiusMeters: sharingStationSearchRadiusMeters }) }}
+            </span>
+          </div>
+          <span class="sharing-settings-hint">{{ t('views.dashboard.events.sharing.settingsDescription') }}</span>
+        </summary>
+        <div class="sharing-settings-body">
+        <label class="sharing-field">
+          <span>{{ t('views.dashboard.events.sharing.providerLabel') }}</span>
+          <select v-model="sharingProviderId" class="sharing-input">
+            <option
+              v-for="provider in sharingProviderOptions"
+              :key="provider.value"
+              :value="provider.value"
+            >
+              {{ provider.label }}
+            </option>
+          </select>
+        </label>
+        <label class="sharing-field">
+          <span>{{ t('views.dashboard.events.sharing.distanceLabel') }}</span>
+          <input
+            v-model.number="sharingShortTripDistanceKm"
+            class="sharing-input"
+            type="number"
+            min="0.5"
+            max="25"
+            step="0.5"
+          >
+        </label>
+        <label class="sharing-field">
+          <span>{{ t('views.dashboard.events.sharing.radiusLabel') }}</span>
+          <input
+            v-model.number="sharingStationSearchRadiusMeters"
+            class="sharing-input"
+            type="number"
+            min="200"
+            max="5000"
+            step="100"
+          >
+        </label>
+        <label v-if="isCustomSharingProvider" class="sharing-field">
+          <span>{{ t('views.dashboard.events.sharing.customProviderLabel') }}</span>
+          <input v-model.trim="sharingCustomProviderLabel" class="sharing-input" type="text">
+        </label>
+        <label v-if="isCustomSharingProvider" class="sharing-field sharing-field--wide">
+          <span>{{ t('views.dashboard.events.sharing.customFeedLabel') }}</span>
+          <input
+            v-model.trim="sharingCustomGbfsUrl"
+            class="sharing-input"
+            type="url"
+            :placeholder="t('views.dashboard.events.sharing.customFeedPlaceholder')"
+          >
+        </label>
+        </div>
+      </details>
+
+      <p v-if="currentLocationError && !isLoadingEvents" class="state-copy">
         {{ currentLocationError }}
       </p>
 
@@ -688,11 +886,22 @@ watch(
             :event-start-iso="event.startIso"
             :last-updated-iso="event.connectionFetchedAt"
             :expanded="isConnectionExpanded(event.id)"
+            :sharing-suggestion="event.sharingSuggestion"
             @toggle="toggleConnection(event.id)"
           />
 
           <p v-else-if="event.connectionError" class="event-meta event-meta--muted">
             🚫 {{ event.connectionError }}
+          </p>
+
+          <SharingOptionCard
+            v-if="event.sharingSuggestion && !event.connection"
+            :suggestion="event.sharingSuggestion"
+            :compact="true"
+          />
+
+          <p v-if="event.sharingError" class="event-meta event-meta--muted">
+            🚲 {{ event.sharingError }}
           </p>
         </li>
       </ul>
@@ -799,6 +1008,73 @@ watch(
 
 .current-location span {
   color: var(--calendar-state-empty);
+}
+
+.sharing-settings {
+  margin-bottom: 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.sharing-settings-summary {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.sharing-settings-summary::-webkit-details-marker {
+  display: none;
+}
+
+.sharing-settings-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  color: #172033;
+}
+
+.sharing-settings-header strong {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.sharing-settings-header span,
+.sharing-settings-hint {
+  font-size: 0.8rem;
+  color: rgba(23, 32, 51, 0.66);
+}
+
+.sharing-settings-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+.sharing-field {
+  display: grid;
+  gap: 6px;
+  color: #172033;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.sharing-field--wide {
+  grid-column: 1 / -1;
+}
+
+.sharing-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  color: #172033;
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .event-list {
@@ -955,6 +1231,15 @@ watch(
 
   .calendar-debug {
     justify-content: flex-start;
+  }
+
+  .sharing-settings-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sharing-settings-body {
+    padding: 0 10px 10px;
   }
 
   .event-meta-text {
