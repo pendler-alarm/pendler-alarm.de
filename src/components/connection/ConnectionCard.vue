@@ -9,11 +9,14 @@ import type {
   ConnectionSummary,
 } from '@/features/motis/routing-service';
 import {
+  buildBahnBookingUrl,
+  canUseDeutschlandticket,
   formatConnectionDuration,
   getConnectionLeadLabel,
   getConnectionProductEmoji,
   getConnectionProductFallbackLabel,
   getConnectionProductIcon,
+  requiresTrainTicketBooking,
 } from '@/components/connection/connection-utils';
 import type { SharingSuggestion } from '@/features/sharing/sharing-service';
 
@@ -24,6 +27,9 @@ const props = defineProps<{
   lastUpdatedIso?: string | null;
   expanded?: boolean;
   sharingSuggestion?: SharingSuggestion | null;
+  deutschlandticketEnabled?: boolean;
+  bahnBookingClass?: '1' | '2';
+  bahnTravelerProfileParam?: string;
 }>();
 
 const emit = defineEmits<{
@@ -56,6 +62,21 @@ const formattedUpdatedAt = computed(() => {
 });
 
 const hasSegments = computed(() => props.connection.segments.length > 0);
+const deutschlandticketActive = computed(() => props.deutschlandticketEnabled === true);
+const deutschlandticketAvailable = computed(() =>
+  deutschlandticketActive.value && canUseDeutschlandticket(props.connection),
+);
+const bahnBookingUrl = computed(() => {
+  if (!requiresTrainTicketBooking(props.connection, deutschlandticketActive.value)) {
+    return null;
+  }
+
+  return buildBahnBookingUrl(props.connection, {
+    deutschlandticketEnabled: deutschlandticketActive.value,
+    bookingClass: props.bahnBookingClass,
+    travelerProfileParam: props.bahnTravelerProfileParam,
+  });
+});
 
 const getAlternativeKey = (alternative: ConnectionOption): string =>
   [
@@ -151,6 +172,26 @@ const toggleExpanded = (): void => {
         <span class="connection-line" aria-hidden="true"></span>
       </div>
       <strong class="connection-time">{{ connection.arrivalTime }}</strong>
+    </div>
+
+    <div
+      v-if="deutschlandticketAvailable || bahnBookingUrl"
+      class="connection-ticket-actions"
+    >
+      <span v-if="deutschlandticketAvailable" class="connection-ticket-badge">
+        <span class="connection-ticket-badge-logo" aria-hidden="true">🎫</span>
+        <span>{{ t('views.dashboard.events.connection.deutschlandticketInfo') }}</span>
+      </span>
+      <a
+        v-if="bahnBookingUrl"
+        class="connection-booking-link"
+        :href="bahnBookingUrl"
+        target="_blank"
+        rel="noreferrer noopener"
+      >
+        <SvgIcon icon="material/open_in_new" :dimension="16" aria-hidden="true" />
+        <span>{{ t('views.dashboard.events.connection.bookTrainTicket') }}</span>
+      </a>
     </div>
 
     <div v-if="isExpanded" class="connection-details">
@@ -400,6 +441,50 @@ const toggleExpanded = (): void => {
   display: grid;
   gap: 12px;
   min-width: 0;
+}
+
+.connection-ticket-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.connection-ticket-badge,
+.connection-booking-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.connection-ticket-badge {
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+}
+
+.connection-ticket-badge-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+}
+
+.connection-booking-link {
+  color: #7c2d12;
+  text-decoration: none;
+  background: rgba(255, 247, 237, 0.92);
+  border: 1px solid rgba(249, 115, 22, 0.24);
+}
+
+.connection-booking-link:hover,
+.connection-booking-link:focus-visible {
+  background: rgba(255, 237, 213, 0.98);
 }
 
 .connection-stops {

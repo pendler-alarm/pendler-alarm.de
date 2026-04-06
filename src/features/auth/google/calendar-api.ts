@@ -204,6 +204,7 @@ const isUpcomingEvent = (event: GoogleCalendarEvent): boolean => {
 export const fetchEventConnection = async (
   origin: ResolvedLocation | null | undefined,
   event: GoogleCalendarEvent,
+  options: { showTransferWalkNodes?: boolean } = {},
 ): Promise<{ connection: ConnectionSummary | null; connectionError: string | null }> => {
   if (!event.locationAddress && !event.locationCoordinates) {
     return {
@@ -241,6 +242,7 @@ export const fetchEventConnection = async (
       arriveBy: true,
       maxConnections: MAX_CONNECTION_OPTIONS,
       searchWindowMinutes: CONNECTION_SEARCH_WINDOW_MINUTES,
+      showTransferWalkNodes: options.showTransferWalkNodes,
     });
 
     return connection

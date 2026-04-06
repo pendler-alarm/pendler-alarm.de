@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import type { BahnBookingClass } from '@/components/connection/connection-utils';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import Message from '@/components/Message.vue';
@@ -39,6 +40,13 @@ type NotificationUiState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupp
 const refreshIntervalMs = 5 * 60_000;
 const REMINDER_LEAD_KEY = 'pendler-alarm.reminder-lead-minutes';
 const SHARING_PREFERENCES_KEY = 'pendler-alarm.sharing-preferences';
+const DEUTSCHLANDTICKET_KEY = 'pendler-alarm.deutschlandticket-enabled';
+const TRANSFER_WALK_NODES_KEY = 'pendler-alarm.transfer-walk-nodes';
+const BAHN_BOOKING_CLASS_KEY = 'pendler-alarm.bahn-booking-class';
+const BAHN_TRAVELER_PROFILE_KEY = 'pendler-alarm.bahn-traveler-profile';
+const DEFAULT_BAHN_BOOKING_CLASS: BahnBookingClass = '2';
+const DEFAULT_BAHN_TRAVELER_PROFILE = '13:23:KLASSE_2:1';
+const DEFAULT_TRANSFER_WALK_NODES = false;
 const DEFAULT_LEAD_MINUTES = 30;
 const defaultSharingPreferences = getDefaultSharingPreferences();
 
@@ -72,6 +80,54 @@ const loadStoredSharingPreferences = (): SharingPreferences => {
   } catch {
     return defaultSharingPreferences;
   }
+};
+
+const loadStoredDeutschlandticket = (): boolean => {
+  if (typeof window === 'undefined') {
+    return true;
+  }
+
+  const raw = window.localStorage.getItem(DEUTSCHLANDTICKET_KEY);
+
+  if (raw === null) {
+    return true;
+  }
+
+  return raw !== 'false';
+};
+
+
+const loadStoredBahnBookingClass = (): BahnBookingClass => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_BAHN_BOOKING_CLASS;
+  }
+
+  return window.localStorage.getItem(BAHN_BOOKING_CLASS_KEY) === '1' ? '1' : DEFAULT_BAHN_BOOKING_CLASS;
+};
+
+const loadStoredBahnTravelerProfile = (): string => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_BAHN_TRAVELER_PROFILE;
+  }
+
+  const raw = window.localStorage.getItem(BAHN_TRAVELER_PROFILE_KEY)?.trim();
+
+  return raw || DEFAULT_BAHN_TRAVELER_PROFILE;
+};
+
+
+const loadStoredTransferWalkNodes = (): boolean => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_TRANSFER_WALK_NODES;
+  }
+
+  const raw = window.localStorage.getItem(TRANSFER_WALK_NODES_KEY);
+
+  if (raw === null) {
+    return DEFAULT_TRANSFER_WALK_NODES;
+  }
+
+  return raw === 'true';
 };
 
 const getReminderLeadTimeMs = (): number => {
@@ -112,6 +168,10 @@ const sharingShortTripDistanceKm = ref<number>(initialSharingPreferences.shortTr
 const sharingStationSearchRadiusMeters = ref<number>(initialSharingPreferences.stationSearchRadiusMeters);
 const sharingCustomProviderLabel = ref<string>(initialSharingPreferences.customProviderLabel);
 const sharingCustomGbfsUrl = ref<string>(initialSharingPreferences.customGbfsUrl);
+const deutschlandticketEnabled = ref<boolean>(loadStoredDeutschlandticket());
+const bahnBookingClass = ref<BahnBookingClass>(loadStoredBahnBookingClass());
+const bahnTravelerProfileParam = ref<string>(loadStoredBahnTravelerProfile());
+const showTransferWalkNodes = ref<boolean>(loadStoredTransferWalkNodes());
 let loadSequence = 0;
 let refreshTimer: number | null = null;
 const reminderTimers = new Map<string, number>();
@@ -148,6 +208,28 @@ const sharingPreferences = computed<SharingPreferences>(() => ({
   customGbfsUrl: sharingCustomGbfsUrl.value,
 }));
 const isCustomSharingProvider = computed(() => sharingProviderId.value === 'custom');
+const bahnBookingClassOptions = computed(() => [
+  { value: '1', label: t('views.dashboard.events.settings.classFirst') },
+  { value: '2', label: t('views.dashboard.events.settings.classSecond') },
+]);
+const travelerProfileSummaryLabel = computed(() => {
+  if (bahnTravelerProfileParam.value === DEFAULT_BAHN_TRAVELER_PROFILE) {
+    return t('views.dashboard.events.settings.travelerProfileDefault');
+  }
+
+  return bahnTravelerProfileParam.value;
+});
+const settingsSummaryLabel = computed(() => t('views.dashboard.events.settings.summary', {
+  deutschlandticket: deutschlandticketEnabled.value
+    ? t('views.dashboard.events.settings.deutschlandticketEnabled')
+    : t('views.dashboard.events.settings.deutschlandticketDisabled'),
+  travelerProfile: travelerProfileSummaryLabel.value,
+  bookingClass: bahnBookingClassOptions.value.find((option) => option.value === bahnBookingClass.value)?.label
+    ?? t('views.dashboard.events.settings.classSecond'),
+  provider: currentSharingProviderLabel.value,
+  distanceKm: sharingShortTripDistanceKm.value,
+  radiusMeters: sharingStationSearchRadiusMeters.value,
+}));
 const notificationStatusVariant = computed<'success' | 'warning' | 'error'>(() => {
   if (notificationState.value === 'granted') {
     return 'success';
@@ -394,6 +476,41 @@ const persistSharingPreferences = (): void => {
   }
 
   window.localStorage.setItem(SHARING_PREFERENCES_KEY, JSON.stringify(sharingPreferences.value));
+};
+
+const persistDeutschlandticketPreference = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(DEUTSCHLANDTICKET_KEY, String(deutschlandticketEnabled.value));
+};
+
+const persistBahnBookingClass = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(BAHN_BOOKING_CLASS_KEY, bahnBookingClass.value);
+};
+
+const persistBahnTravelerProfile = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(
+    BAHN_TRAVELER_PROFILE_KEY,
+    bahnTravelerProfileParam.value.trim() || DEFAULT_BAHN_TRAVELER_PROFILE,
+  );
+};
+
+const persistTransferWalkNodes = (): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(TRANSFER_WALK_NODES_KEY, String(showTransferWalkNodes.value));
 };
 
 const clearReminderTimers = (): void => {
@@ -648,7 +765,7 @@ const refreshConnections = async (eventIds?: string[]): Promise<void> => {
       return;
     }
 
-    const { connection, connectionError } = await fetchEventConnection(currentLocation.value, event);
+    const { connection, connectionError } = await fetchEventConnection(currentLocation.value, event, { showTransferWalkNodes: showTransferWalkNodes.value });
 
     if (sequence !== loadSequence) {
       return;
@@ -683,7 +800,7 @@ const loadConnections = async (
 
     applyCachedConnection(event);
     setConnectionLoading(event.id, true);
-    const { connection, connectionError } = await fetchEventConnection(origin, event);
+    const { connection, connectionError } = await fetchEventConnection(origin, event, { showTransferWalkNodes: showTransferWalkNodes.value });
 
     if (sequence !== loadSequence) {
       return;
@@ -871,6 +988,22 @@ watch(
   },
   { deep: true },
 );
+
+watch(deutschlandticketEnabled, () => {
+  persistDeutschlandticketPreference();
+});
+
+watch(bahnBookingClass, () => {
+  persistBahnBookingClass();
+});
+
+watch(bahnTravelerProfileParam, () => {
+  persistBahnTravelerProfile();
+});
+
+watch(showTransferWalkNodes, () => {
+  persistTransferWalkNodes();
+});
 </script>
 
 <template>
@@ -919,61 +1052,91 @@ watch(
       <details class="sharing-settings">
         <summary class="sharing-settings-summary">
           <div class="sharing-settings-header">
-            <strong>{{ t('views.dashboard.events.sharing.settingsTitle') }}</strong>
-            <span>
-              {{ t('views.dashboard.events.sharing.settingsSummary', { provider: currentSharingProviderLabel, distanceKm: sharingShortTripDistanceKm, radiusMeters: sharingStationSearchRadiusMeters }) }}
-            </span>
+            <strong>{{ t('views.dashboard.events.settings.title') }}</strong>
+            <span>{{ settingsSummaryLabel }}</span>
           </div>
-          <span class="sharing-settings-hint">{{ t('views.dashboard.events.sharing.settingsDescription') }}</span>
+          <span class="sharing-settings-hint">{{ t('views.dashboard.events.settings.description') }}</span>
         </summary>
         <div class="sharing-settings-body">
-        <label class="sharing-field">
-          <span>{{ t('views.dashboard.events.sharing.providerLabel') }}</span>
-          <select v-model="sharingProviderId" class="sharing-input">
-            <option
-              v-for="provider in sharingProviderOptions"
-              :key="provider.value"
-              :value="provider.value"
+          <label class="sharing-field sharing-field--wide sharing-field--toggle">
+            <span>{{ t('views.dashboard.events.settings.deutschlandticketLabel') }}</span>
+            <span class="sharing-settings-hint">{{ t('views.dashboard.events.settings.deutschlandticketHint') }}</span>
+            <input v-model="deutschlandticketEnabled" class="sharing-checkbox" type="checkbox">
+          </label>
+          <label class="sharing-field">
+            <span>{{ t('views.dashboard.events.settings.bookingClassLabel') }}</span>
+            <select v-model="bahnBookingClass" class="sharing-input">
+              <option
+                v-for="option in bahnBookingClassOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+          <label class="sharing-field sharing-field--wide">
+            <span>{{ t('views.dashboard.events.settings.travelerProfileLabel') }}</span>
+            <span class="sharing-settings-hint">{{ t('views.dashboard.events.settings.travelerProfileHint') }}</span>
+            <input
+              v-model.trim="bahnTravelerProfileParam"
+              class="sharing-input"
+              type="text"
+              :placeholder="t('views.dashboard.events.settings.travelerProfilePlaceholder')"
             >
-              {{ provider.label }}
-            </option>
-          </select>
-        </label>
-        <label class="sharing-field">
-          <span>{{ t('views.dashboard.events.sharing.distanceLabel') }}</span>
-          <input
-            v-model.number="sharingShortTripDistanceKm"
-            class="sharing-input"
-            type="number"
-            min="0.5"
-            max="25"
-            step="0.5"
-          >
-        </label>
-        <label class="sharing-field">
-          <span>{{ t('views.dashboard.events.sharing.radiusLabel') }}</span>
-          <input
-            v-model.number="sharingStationSearchRadiusMeters"
-            class="sharing-input"
-            type="number"
-            min="200"
-            max="5000"
-            step="100"
-          >
-        </label>
-        <label v-if="isCustomSharingProvider" class="sharing-field">
-          <span>{{ t('views.dashboard.events.sharing.customProviderLabel') }}</span>
-          <input v-model.trim="sharingCustomProviderLabel" class="sharing-input" type="text">
-        </label>
-        <label v-if="isCustomSharingProvider" class="sharing-field sharing-field--wide">
-          <span>{{ t('views.dashboard.events.sharing.customFeedLabel') }}</span>
-          <input
-            v-model.trim="sharingCustomGbfsUrl"
-            class="sharing-input"
-            type="url"
-            :placeholder="t('views.dashboard.events.sharing.customFeedPlaceholder')"
-          >
-        </label>
+          </label>
+          <label class="sharing-field sharing-field--wide sharing-field--toggle">
+            <span>{{ t('views.dashboard.events.settings.transferWalkLabel') }}</span>
+            <span class="sharing-settings-hint">{{ t('views.dashboard.events.settings.transferWalkHint') }}</span>
+            <input v-model="showTransferWalkNodes" class="sharing-checkbox" type="checkbox">
+          </label>
+          <label class="sharing-field">
+            <span>{{ t('views.dashboard.events.sharing.providerLabel') }}</span>
+            <select v-model="sharingProviderId" class="sharing-input">
+              <option
+                v-for="provider in sharingProviderOptions"
+                :key="provider.value"
+                :value="provider.value"
+              >
+                {{ provider.label }}
+              </option>
+            </select>
+          </label>
+          <label class="sharing-field">
+            <span>{{ t('views.dashboard.events.sharing.distanceLabel') }}</span>
+            <input
+              v-model.number="sharingShortTripDistanceKm"
+              class="sharing-input"
+              type="number"
+              min="0.5"
+              max="25"
+              step="0.5"
+            >
+          </label>
+          <label class="sharing-field">
+            <span>{{ t('views.dashboard.events.sharing.radiusLabel') }}</span>
+            <input
+              v-model.number="sharingStationSearchRadiusMeters"
+              class="sharing-input"
+              type="number"
+              min="200"
+              max="5000"
+              step="100"
+            >
+          </label>
+          <label v-if="isCustomSharingProvider" class="sharing-field">
+            <span>{{ t('views.dashboard.events.sharing.customProviderLabel') }}</span>
+            <input v-model.trim="sharingCustomProviderLabel" class="sharing-input" type="text">
+          </label>
+          <label v-if="isCustomSharingProvider" class="sharing-field sharing-field--wide">
+            <span>{{ t('views.dashboard.events.sharing.customFeedLabel') }}</span>
+            <input
+              v-model.trim="sharingCustomGbfsUrl"
+              class="sharing-input"
+              type="url"
+              :placeholder="t('views.dashboard.events.sharing.customFeedPlaceholder')"
+            >
+          </label>
         </div>
       </details>
 
@@ -1021,6 +1184,7 @@ watch(
             :last-updated-iso="event.connectionFetchedAt"
             :expanded="isConnectionExpanded(event.id)"
             :sharing-suggestion="event.sharingSuggestion"
+            :deutschlandticket-enabled="deutschlandticketEnabled"
             @toggle="toggleConnection(event.id)"
           />
 
@@ -1413,6 +1577,18 @@ watch(
 
 .sharing-field--wide {
   grid-column: 1 / -1;
+}
+
+.sharing-field--toggle {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.sharing-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: #166534;
 }
 
 .sharing-input {

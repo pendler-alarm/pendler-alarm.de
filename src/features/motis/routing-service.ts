@@ -13,6 +13,8 @@ export type ConnectionProductType =
   | 'bus'
   | 'tram'
   | 'train'
+  | 'ice'
+  | 'ic'
   | 'ferry'
   | 'walk';
 
@@ -53,6 +55,7 @@ type FetchConnectionOptions = {
   arriveBy?: boolean;
   maxConnections?: number;
   searchWindowMinutes?: number;
+  showTransferWalkNodes?: boolean;
 };
 
 type MotisPlace = {
@@ -80,6 +83,7 @@ type MotisLeg = {
   cancelled?: boolean;
   tripCancelled?: boolean;
   routeShortName?: string;
+  tripShortName?: string;
   displayName?: string;
   headsign?: string;
 };
@@ -111,6 +115,8 @@ const tramLinePattern = /\b(tram|str|m\d{1,2})\b/i;
 const sbahnPattern = /\bs\s?\d{1,2}\b/i;
 const ubahnPattern = /\bu\s?\d{1,2}\b/i;
 const regioPattern = /\b(re|rb|ire|mrx|merz|ag|erx)\b/i;
+const icePattern = /\bice\b/i;
+const icPattern = /\b(ic|ec)\b/i;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
@@ -135,9 +141,20 @@ const getLegLabel = (leg: MotisLeg): string => {
     return 'Fußweg';
   }
 
-  return leg.displayName?.trim()
-    || leg.routeShortName?.trim()
-    || leg.headsign?.trim()
+  const routeShortName = leg.routeShortName?.trim();
+  const tripShortName = leg.tripShortName?.trim();
+  const displayName = leg.displayName?.trim();
+  const headsign = leg.headsign?.trim();
+  const isNumericRoute = Boolean(routeShortName && /^\d+$/u.test(routeShortName));
+  const preferredLong = displayName || tripShortName;
+
+  if (preferredLong && (isNumericRoute || !routeShortName)) {
+    return preferredLong;
+  }
+
+  return routeShortName
+    || preferredLong
+    || headsign
     || formatModeName(leg.mode);
 };
 
@@ -148,9 +165,20 @@ const getLegLineLabel = (leg: MotisLeg): string => {
     return 'Fußweg';
   }
 
-  return leg.routeShortName?.trim()
-    || leg.displayName?.trim()
-    || leg.headsign?.trim()
+  const routeShortName = leg.routeShortName?.trim();
+  const tripShortName = leg.tripShortName?.trim();
+  const displayName = leg.displayName?.trim();
+  const headsign = leg.headsign?.trim();
+  const isNumericRoute = Boolean(routeShortName && /^\d+$/u.test(routeShortName));
+  const preferredLong = displayName || tripShortName;
+
+  if (preferredLong && (isNumericRoute || !routeShortName)) {
+    return preferredLong;
+  }
+
+  return routeShortName
+    || preferredLong
+    || headsign
     || formatModeName(leg.mode);
 };
 
@@ -278,10 +306,10 @@ const hasMeaningfulWalkTransfer = (walkLeg: MotisLeg, previousLeg?: MotisLeg | n
     return true;
   }
 
-  const previousKey = normalizeStopKey(previousStop);
-  const nextKey = normalizeStopKey(nextStop);
+  const previousName = previousStop.name?.trim().toLowerCase();
+  const nextName = nextStop.name?.trim().toLowerCase();
 
-  if (previousKey && nextKey && previousKey !== nextKey) {
+  if (previousName && nextName && previousName != nextName) {
     return true;
   }
 
@@ -299,7 +327,7 @@ const hasMeaningfulWalkTransfer = (walkLeg: MotisLeg, previousLeg?: MotisLeg | n
   return (walkLeg.duration ?? 0) >= WALK_TRANSFER_DURATION_THRESHOLD_SECONDS;
 };
 
-const shouldIncludeSegment = (legs: MotisLeg[], index: number, leg: MotisLeg): boolean => {
+const shouldIncludeSegment = (legs: MotisLeg[], index: number, leg: MotisLeg, showTransferWalkNodes: boolean): boolean => {
   const mode = leg.mode?.toUpperCase().trim() ?? '';
 
   if (!nonTransitModes.has(mode)) {
@@ -315,6 +343,10 @@ const shouldIncludeSegment = (legs: MotisLeg[], index: number, leg: MotisLeg): b
   const isInternalTransferWalk = isTransitLeg(previousLeg) && isTransitLeg(nextLeg);
 
   if (!isInternalTransferWalk) {
+    return true;
+  }
+
+  if (showTransferWalkNodes) {
     return true;
   }
 
@@ -346,6 +378,14 @@ const getProductType = (leg: MotisLeg): ConnectionProductType => {
   }
 
   if (mode === 'LONG_DISTANCE' || mode === 'HIGHSPEED_RAIL' || mode === 'NIGHT_RAIL') {
+    if (icePattern.test(label)) {
+      return 'ice';
+    }
+
+    if (icPattern.test(label)) {
+      return 'ic';
+    }
+
     return 'train';
   }
 
@@ -356,6 +396,14 @@ const getProductType = (leg: MotisLeg): ConnectionProductType => {
 
     if (regioPattern.test(label)) {
       return 'regio';
+    }
+
+    if (icePattern.test(label)) {
+      return 'ice';
+    }
+
+    if (icPattern.test(label)) {
+      return 'ic';
     }
 
     return 'train';
@@ -376,6 +424,10 @@ const getProductLabel = (type: ConnectionProductType): string => {
       return 'Tram';
     case 'regio':
       return 'Regio';
+    case 'ice':
+      return 'ICE';
+    case 'ic':
+      return 'IC';
     case 'train':
       return 'Bahn';
     case 'walk':
@@ -385,11 +437,11 @@ const getProductLabel = (type: ConnectionProductType): string => {
   }
 };
 
-const getSegments = (itinerary: MotisItinerary): ConnectionSegment[] => {
+const getSegments = (itinerary: MotisItinerary, showTransferWalkNodes: boolean): ConnectionSegment[] => {
   const legs = Array.isArray(itinerary.legs) ? itinerary.legs : [];
 
   return legs
-    .filter((leg, index) => shouldIncludeSegment(legs, index, leg))
+    .filter((leg, index) => shouldIncludeSegment(legs, index, leg, showTransferWalkNodes))
     .map((leg, index) => {
       const departureIso = leg.departure ?? leg.from?.departure ?? null;
       const arrivalIso = leg.arrival ?? leg.to?.arrival ?? null;
@@ -468,12 +520,12 @@ const pickItineraries = (
     .slice(0, maxConnections);
 };
 
-const toConnectionOption = (itinerary: MotisItinerary): ConnectionOption => {
+const toConnectionOption = (itinerary: MotisItinerary, showTransferWalkNodes: boolean): ConnectionOption => {
   const firstLeg = getFirstLeg(itinerary);
   const lastLeg = getLastLeg(itinerary);
   const departureIso = getDepartureIso(itinerary, firstLeg) ?? null;
   const arrivalIso = getArrivalIso(itinerary, lastLeg) ?? null;
-  const segments = getSegments(itinerary);
+  const segments = getSegments(itinerary, showTransferWalkNodes);
 
   return {
     departureIso,
@@ -578,7 +630,8 @@ export const fetchNextConnection = async (
     return null;
   }
 
-  const [primary, ...alternatives] = itineraries.map(toConnectionOption);
+  const includeTransferWalkNodes = Boolean(options.showTransferWalkNodes);
+  const [primary, ...alternatives] = itineraries.map((itinerary) => toConnectionOption(itinerary, includeTransferWalkNodes));
 
   if (!primary) {
     return null;
