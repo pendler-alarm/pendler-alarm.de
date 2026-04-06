@@ -1,4 +1,7 @@
+ 
 import { getLocale, translate } from '@/i18n';
+import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
+import { getCachedGeoLocation, storeCachedGeoLocation } from '@/lib/geo-cache';
 import { MOTIS_API_GEOCODE, MOTIS_API_REVERSE_GEOCODE } from '@/utils/constants/api';
 
 export type Coordinates = {
@@ -82,24 +85,104 @@ const formatAddress = (match?: MotisMatch, fallback?: string | null): string | n
   ]);
 };
 
-const requestMotis = async <T>(url: string): Promise<T> => {
-  const response = await fetch(url, {
-    headers: {
+const paramsToObject = (params: URLSearchParams): Record<string, string> =>
+  Object.fromEntries(params.entries());
+
+const requestMotis = async <T>(
+  label: 'geocode' | 'reverse-geocode',
+  url: string,
+  query: Record<string, string>,
+  cacheKey?: string,
+  cachedResponse?: T,
+): Promise<T> => {
+  const requestId = startApiRequest('motis', label, {
+    method: 'GET',
+    url,
+    query,
+    requestJson: query,
+    requestHeaders: {
       Accept: 'application/json',
     },
+    cacheHit: cachedResponse !== undefined,
+    cacheKey,
+    cacheSource: cachedResponse !== undefined ? 'localStorage' : undefined,
   });
 
+  if (cachedResponse !== undefined) {
+    finishApiRequest(requestId, 'success', 200, {
+      responseJson: cachedResponse,
+      cacheHit: true,
+      cacheKey,
+      cacheSource: 'localStorage',
+      note: translate('views.dashboard.events.debug.history.errors.cacheServed'),
+    });
+    return cachedResponse;
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+  } catch (error) {
+    finishApiRequest(requestId, 'error', null, {
+      errorKind: 'network',
+      errorMessage: error instanceof Error ? error.message : translate('views.dashboard.events.debug.history.errors.unknownFetch'),
+      cacheHit: false,
+      cacheKey,
+    });
+    throw error;
+  }
+
+  let responseJson: unknown = null;
+
+  try {
+    responseJson = await response.json();
+  } catch (error) {
+    finishApiRequest(requestId, 'error', response.status, {
+      errorKind: 'invalid-json',
+      errorMessage: error instanceof Error ? error.message : translate('views.dashboard.events.debug.history.errors.invalidJson'),
+      cacheHit: false,
+      cacheKey,
+    });
+    throw error;
+  }
+
   if (!response.ok) {
+    finishApiRequest(requestId, 'error', response.status, {
+      responseJson,
+      errorKind: 'http',
+      errorMessage: translate('calendar.error.motisFailed', { status: response.status }),
+      cacheHit: false,
+      cacheKey,
+    });
     throw new Error(translate('calendar.error.motisFailed', { status: response.status }));
   }
 
-  return (await response.json()) as T;
+  finishApiRequest(requestId, 'success', response.status, {
+    responseJson,
+    responseHeaders: {
+      'content-type': response.headers.get('content-type') ?? '',
+    },
+    cacheHit: false,
+    cacheKey,
+  });
+
+  return responseJson as T;
 };
 
 export const formatCoordinates = ({ lat, lon }: Coordinates): string =>
   `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
 
 export const createPlaceQuery = ({ lat, lon }: Coordinates): string => `${lat},${lon}`;
+
+const createGeocodeCacheKey = (text: string): string => `geocode:${text.trim().toLocaleLowerCase(getLocale())}`;
+
+const createReverseGeocodeCacheKey = (coordinates: Coordinates): string =>
+  `reverse:${coordinates.lat.toFixed(6)},${coordinates.lon.toFixed(6)}`;
 
 export const parseCoordinatesFromText = (value?: string | null): Coordinates | null => {
   if (!value) {
@@ -129,16 +212,31 @@ export const reverseGeocodeLocation = async (coordinates: Coordinates): Promise<
   const params = new URLSearchParams({
     place: createPlaceQuery(coordinates),
   });
-
-  const matches = await requestMotis<MotisMatch[]>(`${MOTIS_API_REVERSE_GEOCODE}?${params.toString()}`);
+  const cacheKey = createReverseGeocodeCacheKey(coordinates);
+  const cached = getCachedGeoLocation(cacheKey);
+  const url = `${MOTIS_API_REVERSE_GEOCODE}?${params.toString()}`;
+  const matches = await requestMotis<MotisMatch[]>(
+    'reverse-geocode',
+    url,
+    paramsToObject(params),
+    cacheKey,
+    cached ? [{
+      name: cached.address ?? undefined,
+      lat: cached.coordinates?.lat,
+      lon: cached.coordinates?.lon,
+    }] : undefined,
+  );
   const bestMatch = matches.find((candidate) => isFiniteNumber(candidate.lat) && isFiniteNumber(candidate.lon));
 
-  return {
-    address: formatAddress(bestMatch),
+  const resolved = {
+    address: formatAddress(bestMatch, cached?.address ?? null),
     coordinates: bestMatch && isFiniteNumber(bestMatch.lat) && isFiniteNumber(bestMatch.lon)
       ? { lat: bestMatch.lat, lon: bestMatch.lon }
-      : coordinates,
-  };
+      : cached?.coordinates ?? coordinates,
+  } satisfies ResolvedLocation;
+
+  storeCachedGeoLocation(cacheKey, resolved);
+  return resolved;
 };
 
 export const geocodeLocation = async (text: string): Promise<ResolvedLocation> => {
@@ -148,15 +246,31 @@ export const geocodeLocation = async (text: string): Promise<ResolvedLocation> =
 
   params.append('language', getLocale());
 
-  const matches = await requestMotis<MotisMatch[]>(`${MOTIS_API_GEOCODE}?${params.toString()}`);
+  const cacheKey = createGeocodeCacheKey(text);
+  const cached = getCachedGeoLocation(cacheKey);
+  const url = `${MOTIS_API_GEOCODE}?${params.toString()}`;
+  const matches = await requestMotis<MotisMatch[]>(
+    'geocode',
+    url,
+    paramsToObject(params),
+    cacheKey,
+    cached ? [{
+      name: cached.address ?? undefined,
+      lat: cached.coordinates?.lat,
+      lon: cached.coordinates?.lon,
+    }] : undefined,
+  );
   const bestMatch = matches.find((candidate) => isFiniteNumber(candidate.lat) && isFiniteNumber(candidate.lon));
 
-  return {
+  const resolved = {
     address: formatAddress(bestMatch, text),
     coordinates: bestMatch && isFiniteNumber(bestMatch.lat) && isFiniteNumber(bestMatch.lon)
       ? { lat: bestMatch.lat, lon: bestMatch.lon }
-      : null,
-  };
+      : cached?.coordinates ?? null,
+  } satisfies ResolvedLocation;
+
+  storeCachedGeoLocation(cacheKey, resolved);
+  return resolved;
 };
 
 export const resolveLocation = async (value?: string | null): Promise<ResolvedLocation> => {

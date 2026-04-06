@@ -1,4 +1,6 @@
+ 
 import { translate } from '@/i18n';
+import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
 import type { Coordinates } from '@/features/motis/location-service';
 
 export type SharingProviderId = 'disabled' | 'nextbike' | 'custom';
@@ -140,18 +142,96 @@ const normalizePreferences = (preferences?: Partial<SharingPreferences>): Sharin
   };
 };
 
-const requestJson = async <T>(url: string): Promise<T> => {
-  const response = await fetch(url, {
-    headers: {
+const parseQueryFromUrl = (url: string): Record<string, string> => {
+  try {
+    return Object.fromEntries(new URL(url).searchParams.entries());
+  } catch {
+    return {};
+  }
+};
+
+const classifyFetchError = (error: unknown): { kind: string; message: string } => {
+  if (error instanceof TypeError) {
+    return {
+      kind: 'cors-or-network',
+      message: error.message || translate('views.dashboard.events.debug.history.errors.requestBlocked'),
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      kind: 'network',
+      message: error.message,
+    };
+  }
+
+  return {
+    kind: 'unknown',
+    message: translate('views.dashboard.events.debug.history.errors.unknownRequest'),
+  };
+};
+
+const requestJson = async <T>(
+  label: 'nextbike' | 'gbfs-discovery' | 'gbfs-station-information' | 'gbfs-station-status',
+  url: string,
+): Promise<T> => {
+  const query = parseQueryFromUrl(url);
+  const requestId = startApiRequest('sharing', label, {
+    method: 'GET',
+    url,
+    query,
+    requestJson: query,
+    requestHeaders: {
       Accept: 'application/json',
     },
   });
 
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+  } catch (error) {
+    const classified = classifyFetchError(error);
+    finishApiRequest(requestId, 'error', null, {
+      errorKind: classified.kind,
+      errorMessage: classified.message,
+    });
+    throw new Error(classified.message);
+  }
+
+  let payload: unknown;
+
+  try {
+    payload = await response.json();
+  } catch (error) {
+    finishApiRequest(requestId, 'error', response.status, {
+      errorKind: 'invalid-json',
+      errorMessage: error instanceof Error ? error.message : translate('views.dashboard.events.debug.history.errors.invalidJson'),
+    });
+    throw error;
+  }
+
   if (!response.ok) {
+    finishApiRequest(requestId, 'error', response.status, {
+      responseJson: payload,
+      errorKind: 'http',
+      errorMessage: `HTTP ${String(response.status)}`,
+    });
     throw new Error(`HTTP ${String(response.status)}`);
   }
 
-  return (await response.json()) as T;
+  finishApiRequest(requestId, 'success', response.status, {
+    responseJson: payload,
+    responseHeaders: {
+      'content-type': response.headers.get('content-type') ?? '',
+    },
+  });
+
+  return payload as T;
 };
 
 const toSharingStation = (
@@ -197,7 +277,7 @@ const fetchNextbikeStations = async (
     limit: '20',
   });
 
-  const payload = await requestJson<NextbikeResponse>(`${NEXTBIKE_API_URL}?${params.toString()}`);
+  const payload = await requestJson<NextbikeResponse>('nextbike', `${NEXTBIKE_API_URL}?${params.toString()}`);
   return parseNextbikeStations(payload, coordinates).filter((station) => station.distanceMeters <= radiusMeters);
 };
 
@@ -245,7 +325,7 @@ const fetchGbfsStations = async (
   radiusMeters: number,
   gbfsUrl: string,
 ): Promise<{ pickup: SharingStation | null; dropoff: SharingStation | null }> => {
-  const discovery = await requestJson<GbfsAutoDiscoveryResponse>(gbfsUrl);
+  const discovery = await requestJson<GbfsAutoDiscoveryResponse>('gbfs-discovery', gbfsUrl);
   const stationInformationUrl = findGbfsFeedUrl(discovery, 'station_information');
   const stationStatusUrl = findGbfsFeedUrl(discovery, 'station_status');
 
@@ -254,8 +334,8 @@ const fetchGbfsStations = async (
   }
 
   const [stationInformation, stationStatus] = await Promise.all([
-    requestJson<GbfsStationInformationResponse>(stationInformationUrl),
-    requestJson<GbfsStationStatusResponse>(stationStatusUrl),
+    requestJson<GbfsStationInformationResponse>('gbfs-station-information', stationInformationUrl),
+    requestJson<GbfsStationStatusResponse>('gbfs-station-status', stationStatusUrl),
   ]);
 
   const statusById = new Map(
@@ -400,10 +480,14 @@ export const findSharingSuggestion = async (
       },
       error: null,
     };
-  } catch {
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : null;
+
     return {
       suggestion: null,
-      error: translate('views.dashboard.events.sharing.loadFailed', { provider: providerLabel }),
+      error: reason
+        ? `${translate('views.dashboard.events.sharing.loadFailed', { provider: providerLabel })} (${reason})`
+        : translate('views.dashboard.events.sharing.loadFailed', { provider: providerLabel }),
     };
   }
 };

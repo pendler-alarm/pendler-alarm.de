@@ -24,7 +24,13 @@ import {
   type SharingPreferences,
   type SharingProviderId,
 } from '@/features/sharing/sharing-service';
-import { getApiMetrics } from '@/lib/api-metrics';
+import {
+  clearApiRequestHistory,
+  getApiMetrics,
+  type ApiRequestHistoryEntry,
+  type ApiRequestStatus,
+  type ApiRequestType,
+} from '@/lib/api-metrics';
 import { getCachedConnection, storeConnection } from '@/lib/connection-cache';
 import { useGoogleAuthStore } from '@/features/auth/google/store';
 
@@ -98,6 +104,9 @@ const debugNotificationFeedback = ref<{
   message: string;
 } | null>(null);
 const currentDebugNotificationTag = ref<string | null>(null);
+const debugHistoryQuery = ref('');
+const debugHistoryTypeFilter = ref<'all' | ApiRequestType>('all');
+const debugHistoryStatusFilter = ref<'all' | ApiRequestStatus>('all');
 const sharingProviderId = ref<SharingProviderId>(initialSharingPreferences.providerId);
 const sharingShortTripDistanceKm = ref<number>(initialSharingPreferences.shortTripDistanceKm);
 const sharingStationSearchRadiusMeters = ref<number>(initialSharingPreferences.stationSearchRadiusMeters);
@@ -109,8 +118,19 @@ const reminderTimers = new Map<string, number>();
 const sentReminderKeys = new Set<string>();
 const notificationIconUrl = new URL('../assets/svg/logo.svg', import.meta.url).href;
 
-const apiTotal = computed(() => apiMetrics.value.googleCalendar + apiMetrics.value.motis);
+const apiTotal = computed(() => apiMetrics.value.googleCalendar + apiMetrics.value.motis + apiMetrics.value.sharing);
 const expandedConnectionCount = computed(() => expandedConnections.value.size);
+const filteredApiHistory = computed<ApiRequestHistoryEntry[]>(() => apiMetrics.value.history.filter((entry) => {
+  const matchesType = debugHistoryTypeFilter.value === 'all' || entry.type === debugHistoryTypeFilter.value;
+  const matchesStatus = debugHistoryStatusFilter.value === 'all' || entry.status === debugHistoryStatusFilter.value;
+  const query = debugHistoryQuery.value.trim().toLowerCase();
+  const matchesQuery = query.length === 0
+    || entry.label.toLowerCase().includes(query)
+    || formatTimestamp(entry.startedAtIso)?.toLowerCase().includes(query)
+    || String(entry.statusCode ?? '').includes(query);
+
+  return matchesType && matchesStatus && matchesQuery;
+}));
 const sharingProviderOptions = computed(() => [
   { value: 'disabled', label: t('views.dashboard.events.sharing.providers.disabled') },
   { value: 'nextbike', label: t('views.dashboard.events.sharing.providers.nextbike') },
@@ -156,6 +176,120 @@ const notificationStatusMessage = computed(() => {
 const updateApiMetrics = (): void => {
   apiMetrics.value = getApiMetrics();
 };
+
+const debugHistoryJson = computed(() => JSON.stringify({
+  googleCalendar: apiMetrics.value.googleCalendar,
+  motis: apiMetrics.value.motis,
+  sharing: apiMetrics.value.sharing,
+  lastUpdatedIso: apiMetrics.value.lastUpdatedIso,
+  lastConnectionRefreshAt: lastConnectionRefreshAt.value,
+  filters: {
+    query: debugHistoryQuery.value,
+    type: debugHistoryTypeFilter.value,
+    status: debugHistoryStatusFilter.value,
+  },
+  visibleHistory: filteredApiHistory.value,
+}, null, 2));
+
+const clearDebugHistory = (): void => {
+  apiMetrics.value = clearApiRequestHistory();
+  debugHistoryQuery.value = '';
+  debugHistoryTypeFilter.value = 'all';
+  debugHistoryStatusFilter.value = 'all';
+};
+
+const getDebugTypeLabel = (type: 'all' | ApiRequestType): string => {
+  if (type === 'all') {
+    return t('views.dashboard.events.debug.filters.allTypes');
+  }
+
+  if (type === 'googleCalendar') {
+    return t('views.dashboard.events.debug.history.googleCalendar');
+  }
+
+  if (type === 'sharing') {
+    return t('views.dashboard.events.debug.history.sharing');
+  }
+
+  return t('views.dashboard.events.debug.history.motis');
+};
+
+const getDebugStatusLabel = (status: 'all' | ApiRequestStatus): string => {
+  if (status === 'all') {
+    return t('views.dashboard.events.debug.filters.allStatuses');
+  }
+
+  switch (status) {
+    case 'pending':
+      return t('views.dashboard.events.debug.status.pending');
+    case 'success':
+      return t('views.dashboard.events.debug.status.success');
+    case 'error':
+      return t('views.dashboard.events.debug.status.error');
+    default:
+      return status;
+  }
+};
+
+const getDebugRequestLabel = (entry: ApiRequestHistoryEntry): string => {
+  if (entry.type === 'googleCalendar' && entry.label === 'events') {
+    return t('views.dashboard.events.debug.history.googleCalendarEvents');
+  }
+
+  if (entry.type === 'motis' && entry.label === 'plan') {
+    return t('views.dashboard.events.debug.history.motisPlan');
+  }
+
+  if (entry.type === 'motis' && entry.label === 'geocode') {
+    return t('views.dashboard.events.debug.history.motisGeocode');
+  }
+
+  if (entry.type === 'motis' && entry.label === 'reverse-geocode') {
+    return t('views.dashboard.events.debug.history.motisReverseGeocode');
+  }
+
+  if (entry.type === 'sharing' && entry.label === 'nextbike') {
+    return t('views.dashboard.events.debug.history.nextbike');
+  }
+
+  if (entry.type === 'sharing' && entry.label === 'gbfs-discovery') {
+    return t('views.dashboard.events.debug.history.gbfsDiscovery');
+  }
+
+  if (entry.type === 'sharing' && entry.label === 'gbfs-station-information') {
+    return t('views.dashboard.events.debug.history.gbfsStationInformation');
+  }
+
+  if (entry.type === 'sharing' && entry.label === 'gbfs-station-status') {
+    return t('views.dashboard.events.debug.history.gbfsStationStatus');
+  }
+
+  return `${getDebugTypeLabel(entry.type)} · ${entry.label}`;
+};
+
+const formatDurationMs = (value: number | null): string => {
+  if (value === null) {
+    return '...';
+  }
+
+  if (value < 1000) {
+    return `${String(value)} ms`;
+  }
+
+  return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)} s`;
+};
+
+const getDebugEntryJson = (entry: ApiRequestHistoryEntry): string => JSON.stringify({
+  id: entry.id,
+  type: entry.type,
+  label: entry.label,
+  startedAtIso: entry.startedAtIso,
+  finishedAtIso: entry.finishedAtIso,
+  status: entry.status,
+  statusCode: entry.statusCode,
+  durationMs: entry.durationMs,
+  payload: entry.payload,
+}, null, 2);
 
 const setDebugNotificationFeedback = (
   variant: 'success' | 'error' | 'warning',
@@ -906,7 +1040,7 @@ watch(
         </li>
       </ul>
 
-      <div class="calendar-debug">
+      <div class="calendar-debug calendar-debug--expanded">
         <details class="debug-details">
           <summary class="debug-summary">
             <span class="debug-label">{{ t('views.dashboard.events.debug.summary') }}</span>
@@ -926,19 +1060,101 @@ watch(
             <div class="debug-row">
               {{ t('views.dashboard.events.debug.motis') }}: {{ apiMetrics.motis }}
             </div>
+            <div class="debug-row">
+              {{ t('views.dashboard.events.debug.sharing') }}: {{ apiMetrics.sharing }}
+            </div>
             <div v-if="lastConnectionRefreshAt" class="debug-row">
               {{ t('views.dashboard.events.debug.lastRefresh') }}: {{ formatTimestamp(lastConnectionRefreshAt) }}
             </div>
             <div class="debug-row">
               {{ t('views.dashboard.events.debug.openConnections', { count: expandedConnectionCount }) }}
             </div>
-            <button
-              class="debug-action"
-              :disabled="events.length === 0"
-              @click="triggerDebugNotification"
-            >
-              {{ t('views.dashboard.events.debug.triggerFirstEventNotification') }}
-            </button>
+
+            <div class="debug-actions">
+              <button
+                class="debug-action"
+                :disabled="events.length === 0"
+                @click="triggerDebugNotification"
+              >
+                {{ t('views.dashboard.events.debug.triggerFirstEventNotification') }}
+              </button>
+              <button
+                class="debug-action debug-action--secondary"
+                :disabled="apiMetrics.history.length === 0"
+                @click="clearDebugHistory"
+              >
+                {{ t('views.dashboard.events.debug.clearHistory') }}
+              </button>
+            </div>
+
+            <div class="debug-filter-grid">
+              <label class="debug-filter-field">
+                <span>{{ t('views.dashboard.events.debug.filters.type') }}</span>
+                <select v-model="debugHistoryTypeFilter" class="debug-filter-input">
+                  <option value="all">{{ getDebugTypeLabel('all') }}</option>
+                  <option value="googleCalendar">{{ getDebugTypeLabel('googleCalendar') }}</option>
+                  <option value="motis">{{ getDebugTypeLabel('motis') }}</option>
+                  <option value="sharing">{{ getDebugTypeLabel('sharing') }}</option>
+                </select>
+              </label>
+              <label class="debug-filter-field">
+                <span>{{ t('views.dashboard.events.debug.filters.status') }}</span>
+                <select v-model="debugHistoryStatusFilter" class="debug-filter-input">
+                  <option value="all">{{ getDebugStatusLabel('all') }}</option>
+                  <option value="pending">{{ getDebugStatusLabel('pending') }}</option>
+                  <option value="success">{{ getDebugStatusLabel('success') }}</option>
+                  <option value="error">{{ getDebugStatusLabel('error') }}</option>
+                </select>
+              </label>
+              <label class="debug-filter-field debug-filter-field--wide">
+                <span>{{ t('views.dashboard.events.debug.filters.search') }}</span>
+                <input
+                  v-model.trim="debugHistoryQuery"
+                  class="debug-filter-input"
+                  type="search"
+                  :placeholder="t('views.dashboard.events.debug.filters.searchPlaceholder')"
+                >
+              </label>
+            </div>
+
+            <div class="debug-history">
+              <div class="debug-history-header">
+                <strong>{{ t('views.dashboard.events.debug.history.title') }}</strong>
+                <span>{{ filteredApiHistory.length }}</span>
+              </div>
+              <p v-if="filteredApiHistory.length === 0" class="debug-history-empty">
+                {{ t('views.dashboard.events.debug.history.empty') }}
+              </p>
+              <ul v-else class="debug-history-list">
+                <li v-for="entry in filteredApiHistory" :key="entry.id" class="debug-history-item">
+                  <div class="debug-history-item-top">
+                    <strong>{{ getDebugRequestLabel(entry) }}</strong>
+                    <span class="debug-history-status" :class="'debug-history-status--' + entry.status">
+                      {{ getDebugStatusLabel(entry.status) }}
+                    </span>
+                  </div>
+                  <div class="debug-history-item-meta">
+                    <span>{{ formatTimestamp(entry.startedAtIso) }}</span>
+                    <span>{{ formatDurationMs(entry.durationMs) }}</span>
+                    <span v-if="entry.statusCode !== null">{{ t('views.dashboard.events.debug.history.httpStatus', { status: entry.statusCode }) }}</span>
+                    <span v-if="entry.payload?.cacheHit" class="debug-history-chip debug-history-chip--cache">
+                      {{ t('views.dashboard.events.debug.history.cacheHit') }}
+                    </span>
+                    <span v-if="entry.payload?.errorKind" class="debug-history-chip">{{ entry.payload.errorKind }}</span>
+                  </div>
+                  <p v-if="entry.payload?.note" class="debug-history-note">{{ entry.payload.note }}</p>
+                  <details v-if="entry.payload" class="debug-history-json">
+                    <summary class="debug-history-json-summary">{{ t('views.dashboard.events.debug.history.showRequestJson') }}</summary>
+                    <pre class="debug-json-pre debug-json-pre--entry">{{ getDebugEntryJson(entry) }}</pre>
+                  </details>
+                </li>
+              </ul>
+            </div>
+
+            <details class="debug-json-details">
+              <summary class="debug-json-summary">{{ t('views.dashboard.events.debug.history.showJson') }}</summary>
+              <pre class="debug-json-pre">{{ debugHistoryJson }}</pre>
+            </details>
           </div>
         </details>
       </div>
@@ -981,6 +1197,139 @@ watch(
 .debug-action:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.debug-action--secondary {
+  color: #dbeafe;
+  background: rgba(15, 23, 42, 0.16);
+}
+
+.debug-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.debug-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.debug-filter-field {
+  display: grid;
+  gap: 6px;
+}
+
+.debug-filter-field--wide {
+  grid-column: 1 / -1;
+}
+
+.debug-filter-field span,
+.debug-history-item-meta,
+.debug-history-empty {
+  color: rgba(226, 232, 240, 0.74);
+}
+
+.debug-filter-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.3);
+}
+
+.debug-history {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.debug-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #f8fafc;
+}
+
+.debug-history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.debug-history-item {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.debug-history-item-top,
+.debug-history-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.debug-history-item-top strong {
+  color: #f8fafc;
+}
+
+.debug-history-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.debug-history-status--pending {
+  background: rgba(191, 219, 254, 0.18);
+  color: #dbeafe;
+}
+
+.debug-history-status--success {
+  background: rgba(34, 197, 94, 0.2);
+  color: #bbf7d0;
+}
+
+.debug-history-status--error {
+  background: rgba(248, 113, 113, 0.18);
+  color: #fecaca;
+}
+
+.debug-json-details {
+  margin-top: 4px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.2);
+}
+
+.debug-json-summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.debug-json-pre {
+  margin: 0;
+  overflow: auto;
+  padding: 0 12px 12px;
+  color: #dbeafe;
+  font-size: 0.76rem;
+  line-height: 1.45;
 }
 
 .calendar-title {
@@ -1176,11 +1525,13 @@ watch(
 
 .calendar-debug {
   margin-top: 16px;
-  display: flex;
-  justify-content: flex-end;
+  display: block;
+  width: 100%;
 }
 
 .debug-details {
+  width: 100%;
+  box-sizing: border-box;
   background: rgba(15, 23, 42, 0.08);
   border-radius: 12px;
   padding: 8px 12px;
@@ -1231,6 +1582,10 @@ watch(
 
   .calendar-debug {
     justify-content: flex-start;
+  }
+
+  .debug-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sharing-settings-header {

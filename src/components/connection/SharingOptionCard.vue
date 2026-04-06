@@ -2,6 +2,8 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { SharingStation, SharingSuggestion } from '@/features/sharing/sharing-service';
+import { formatConnectionDuration } from '@/components/connection/connection-utils';
+import SharingJourneyDetails from '@/components/connection/SharingJourneyDetails.vue';
 
 const props = withDefaults(defineProps<{
   suggestion: SharingSuggestion;
@@ -11,6 +13,7 @@ const props = withDefaults(defineProps<{
 });
 
 const { t } = useI18n();
+const averageBikeMetersPerMinute = 250;
 
 const availabilityVariant = computed<'success' | 'warning'>(() =>
   props.suggestion.originStation && props.suggestion.destinationStation ? 'success' : 'warning',
@@ -19,6 +22,11 @@ const availabilityVariant = computed<'success' | 'warning'>(() =>
 const primaryStation = computed<SharingStation | null>(() =>
   props.suggestion.originStation ?? props.suggestion.destinationStation ?? null,
 );
+
+const estimatedRideDuration = computed(() => {
+  const durationMinutes = Math.max(1, Math.round(props.suggestion.tripDistanceMeters / averageBikeMetersPerMinute));
+  return formatConnectionDuration(durationMinutes);
+});
 
 const formatDistance = (meters: number): string => {
   if (meters >= 1000) {
@@ -75,9 +83,14 @@ const getMapEmbedUrl = (station: SharingStation | null): string | null => {
             <span class="sharing-pill">🚲 {{ suggestion.providerLabel }}</span>
             <strong class="sharing-title">{{ t('views.dashboard.events.sharing.title') }}</strong>
           </div>
-          <span class="sharing-distance">
-            {{ t('views.dashboard.events.sharing.tripDistance', { value: formatDistance(suggestion.tripDistanceMeters) }) }}
-          </span>
+          <div class="sharing-meta">
+            <span class="sharing-distance">
+              {{ t('views.dashboard.events.sharing.tripDistance', { value: formatDistance(suggestion.tripDistanceMeters) }) }}
+            </span>
+            <span class="sharing-duration">
+              {{ t('views.dashboard.events.sharing.estimatedDuration', { value: estimatedRideDuration }) }}
+            </span>
+          </div>
         </div>
 
         <p class="sharing-copy">
@@ -88,6 +101,8 @@ const getMapEmbedUrl = (station: SharingStation | null): string | null => {
             })
           }}
         </p>
+
+        <SharingJourneyDetails :suggestion="suggestion" />
 
         <div class="sharing-grid">
           <div class="sharing-column">
@@ -182,6 +197,12 @@ const getMapEmbedUrl = (station: SharingStation | null): string | null => {
   align-items: flex-start;
 }
 
+.sharing-meta {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+}
+
 .sharing-pill {
   display: inline-flex;
   align-items: center;
@@ -201,6 +222,7 @@ const getMapEmbedUrl = (station: SharingStation | null): string | null => {
 .sharing-title,
 .sharing-label,
 .sharing-distance,
+.sharing-duration,
 .sharing-copy,
 .sharing-footnote,
 .sharing-column span,
@@ -214,6 +236,7 @@ const getMapEmbedUrl = (station: SharingStation | null): string | null => {
 }
 
 .sharing-distance,
+.sharing-duration,
 .sharing-copy,
 .sharing-footnote,
 .sharing-column span,
@@ -224,49 +247,48 @@ const getMapEmbedUrl = (station: SharingStation | null): string | null => {
 .sharing-copy,
 .sharing-footnote {
   margin: 0;
-  line-height: 1.45;
+  color: #4b5563;
 }
 
 .sharing-grid {
   display: grid;
-  gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .sharing-column {
   display: grid;
   gap: 4px;
-  padding: 10px;
+  padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .sharing-label {
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  opacity: 0.76;
+  color: #6b7280;
 }
 
 .sharing-empty {
-  opacity: 0.75;
+  color: #6b7280;
 }
 
 .sharing-map-shell {
   min-width: 0;
-  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: #fff;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .sharing-map {
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 132px;
+  min-height: 180px;
   border: 0;
 }
 
@@ -274,15 +296,19 @@ const getMapEmbedUrl = (station: SharingStation | null): string | null => {
   .sharing-card-body,
   .sharing-card-header,
   .sharing-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sharing-card-header {
-    display: grid;
+    flex-direction: column;
+  }
+
+  .sharing-meta {
+    text-align: left;
   }
 
   .sharing-map {
-    min-height: 116px;
+    min-height: 160px;
   }
 }
 </style>

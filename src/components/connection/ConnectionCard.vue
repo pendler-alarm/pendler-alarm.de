@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import SvgIcon from '@/components/SvgIcon.vue';
 import SharingOptionCard from '@/components/connection/SharingOptionCard.vue';
+import ConnectionRouteDetails from '@/components/connection/ConnectionRouteDetails.vue';
 import type {
   ConnectionOption,
-  ConnectionProductType,
-  ConnectionSegment,
   ConnectionSummary,
 } from '@/features/motis/routing-service';
 import {
   formatConnectionDuration,
   getConnectionLeadLabel,
+  getConnectionProductEmoji,
+  getConnectionProductFallbackLabel,
+  getConnectionProductIcon,
 } from '@/components/connection/connection-utils';
 import type { SharingSuggestion } from '@/features/sharing/sharing-service';
 
@@ -29,6 +31,7 @@ const emit = defineEmits<{
 }>();
 
 const { t, locale } = useI18n();
+const expandedAlternatives = ref<Set<string>>(new Set());
 
 const isExpanded = computed(() => props.expanded ?? false);
 
@@ -64,53 +67,19 @@ const getAlternativeKey = (alternative: ConnectionOption): string =>
 const getAlternativeLeadLabel = (alternative: ConnectionOption): string | null =>
   getConnectionLeadLabel(props.eventStartIso ?? null, alternative);
 
-const getProductIcon = (type: ConnectionProductType): string => {
-  switch (type) {
-    case 'regio':
-      return 'products/BAHN';
-    case 'sbahn':
-      return 'products/SBAHN';
-    case 'ubahn':
-      return 'products/UBAHN';
-    case 'ferry':
-      return 'products/FERRY';
-    case 'bus':
-      return 'products/BUS';
-    case 'tram':
-      return 'products/TRAM';
-    default:
-      return 'products/BAHN';
+const toggleAlternative = (alternativeKey: string): void => {
+  const next = new Set(expandedAlternatives.value);
+
+  if (next.has(alternativeKey)) {
+    next.delete(alternativeKey);
+  } else {
+    next.add(alternativeKey);
   }
+
+  expandedAlternatives.value = next;
 };
 
-const getProductFallbackLabel = (type: ConnectionProductType): string => {
-  switch (type) {
-    case 'regio':
-      return 'RE';
-    case 'sbahn':
-      return 'S';
-    case 'ubahn':
-      return 'U';
-    case 'bus':
-      return 'Bus';
-    case 'tram':
-      return 'Tram';
-    default:
-      return 'Bahn';
-  }
-};
-
-const getTransferLabel = (segment: ConnectionSegment, nextSegment?: ConnectionSegment): string => {
-  if (!nextSegment) {
-    return segment.toStop;
-  }
-
-  if (segment.toStop === nextSegment.fromStop) {
-    return `${segment.toStop} · ${t('views.dashboard.events.connection.transfers', { count: 1 })}`;
-  }
-
-  return `${segment.toStop} → ${nextSegment.fromStop}`;
-};
+const isAlternativeExpanded = (alternativeKey: string): boolean => expandedAlternatives.value.has(alternativeKey);
 
 const toggleExpanded = (): void => {
   emit('toggle');
@@ -137,8 +106,11 @@ const toggleExpanded = (): void => {
           }}
         </span>
         <button type="button" class="connection-toggle" :aria-expanded="isExpanded" @click="toggleExpanded">
-          <SvgIcon :icon="isExpanded ? 'material/expand_less' : 'material/expand_more'" :dimension="18"
-            aria-hidden="true" />
+          <SvgIcon
+            :icon="isExpanded ? 'material/expand_less' : 'material/expand_more'"
+            :dimension="18"
+            aria-hidden="true"
+          />
           <span class="connection-toggle-label">
             {{
               isExpanded
@@ -156,8 +128,19 @@ const toggleExpanded = (): void => {
         <div class="connection-badges">
           <template v-if="hasSegments">
             <span v-for="segment in connection.segments" :key="segment.id" class="connection-badge">
-              <SvgIcon class="connection-badge-icon" :icon="getProductIcon(segment.productType)"
-                :fallback-text="getProductFallbackLabel(segment.productType)" :width="44" :height="20" />
+              <span
+                v-if="getConnectionProductEmoji(segment.productType)"
+                class="connection-badge-emoji"
+                aria-hidden="true"
+              >{{ getConnectionProductEmoji(segment.productType) }}</span>
+              <SvgIcon
+                v-else
+                class="connection-badge-icon"
+                :icon="getConnectionProductIcon(segment.productType) ?? 'products/BAHN'"
+                :fallback-text="getConnectionProductFallbackLabel(segment.productType)"
+                :width="44"
+                :height="20"
+              />
               <span class="connection-badge-label">{{ segment.lineLabel }}</span>
             </span>
           </template>
@@ -179,8 +162,7 @@ const toggleExpanded = (): void => {
       <div class="connection-facts">
         <span class="connection-fact">
           ⏱️ {{ t('views.dashboard.events.connection.duration', {
-            value:
-              formatConnectionDuration(connection.durationMinutes) }) }}
+            value: formatConnectionDuration(connection.durationMinutes) }) }}
         </span>
         <span class="connection-fact">
           🔁 {{ t('views.dashboard.events.connection.transfers', { count: connection.transferCount }) }}
@@ -190,60 +172,65 @@ const toggleExpanded = (): void => {
         </span>
       </div>
 
-      <div v-if="hasSegments" class="connection-route">
-        <strong class="connection-route-title">{{ t('views.dashboard.events.connection.route') }}</strong>
-        <ol class="connection-route-list">
-          <li v-for="(segment, index) in connection.segments" :key="segment.id" class="connection-route-item">
-            <div class="connection-route-content">
-              <div class="connection-route-stop connection-route-stop--start">
-                <div class="connection-route-marker">
-                  <span class="connection-route-dot"></span>
-                  <span v-if="index < connection.segments.length - 1" class="connection-route-rail"
-                    aria-hidden="true"></span>
-                </div>
-                <span class="connection-route-stop-name">{{ segment.fromStop }}</span>
-              </div>
-              <div class="connection-route-header">
-                <div class="connection-route-labels">
-                  <SvgIcon class="connection-product-icon" :icon="getProductIcon(segment.productType)"
-                    :fallback-text="getProductFallbackLabel(segment.productType)" :width="52" :height="24" />
-                  <strong class="connection-route-line">{{ segment.lineLabel }}</strong>
-                </div>
-                <span class="connection-route-times">
-                  {{ segment.departureTime }} - {{ segment.arrivalTime }}
-                </span>
-              </div>
-              <div class="connection-route-stop connection-route-stop--end">
-                <div class="connection-route-marker connection-route-marker--end" aria-hidden="true">
-                  <span class="connection-route-dot"></span>
-                </div>
-                <span class="connection-route-stop-name">{{ segment.toStop }}</span>
-              </div>
-              <p v-if="index < connection.segments.length - 1" class="connection-transfer">
-                {{ getTransferLabel(segment, connection.segments[index + 1]) }}
-              </p>
-            </div>
-          </li>
-        </ol>
-      </div>
+      <ConnectionRouteDetails
+        v-if="hasSegments"
+        :option="connection"
+        :title="t('views.dashboard.events.connection.route')"
+      />
 
       <div v-if="connection.alternatives.length > 0" class="connection-alternatives">
         <strong class="connection-alternatives-title">
           {{ t('views.dashboard.events.connection.earlierOptions') }}
         </strong>
         <ul class="connection-alternatives-list">
-          <li v-for="alternative in connection.alternatives" :key="getAlternativeKey(alternative)"
-            class="connection-alternative">
-            <span class="connection-alternative-time">
-              {{ t('views.dashboard.events.connection.leaveAt', { time: alternative.departureTime }) }}
-            </span>
-            <span class="connection-alternative-arrival">{{ alternative.arrivalTime }}</span>
-            <span class="connection-alternative-meta">
-              {{ t('views.dashboard.events.connection.transfers', { count: alternative.transferCount }) }}
-            </span>
-            <span v-if="getAlternativeLeadLabel(alternative)" class="connection-alternative-meta">
-              {{ getAlternativeLeadLabel(alternative) }}
-            </span>
+          <li
+            v-for="alternative in connection.alternatives"
+            :key="getAlternativeKey(alternative)"
+            class="connection-alternative"
+          >
+            <button
+              type="button"
+              class="connection-alternative-summary"
+              :aria-expanded="isAlternativeExpanded(getAlternativeKey(alternative))"
+              @click="toggleAlternative(getAlternativeKey(alternative))"
+            >
+              <span class="connection-alternative-main">
+                <span class="connection-alternative-time">
+                  {{ t('views.dashboard.events.connection.leaveAt', { time: alternative.departureTime }) }}
+                </span>
+                <span class="connection-alternative-arrival">{{ alternative.arrivalTime }}</span>
+              </span>
+              <span class="connection-alternative-side">
+                <span class="connection-alternative-meta">
+                  {{ t('views.dashboard.events.connection.transfers', { count: alternative.transferCount }) }}
+                </span>
+                <span v-if="getAlternativeLeadLabel(alternative)" class="connection-alternative-meta">
+                  {{ getAlternativeLeadLabel(alternative) }}
+                </span>
+                <span class="connection-alternative-meta">
+                  {{ t('views.dashboard.events.connection.duration', { value: formatConnectionDuration(alternative.durationMinutes) }) }}
+                </span>
+              </span>
+              <SvgIcon
+                :icon="isAlternativeExpanded(getAlternativeKey(alternative)) ? 'material/expand_less' : 'material/expand_more'"
+                :dimension="18"
+                aria-hidden="true"
+              />
+            </button>
+
+            <div v-if="isAlternativeExpanded(getAlternativeKey(alternative))" class="connection-alternative-details">
+              <div class="connection-facts connection-facts--alternative">
+                <span class="connection-fact">
+                  ⏱️ {{ t('views.dashboard.events.connection.duration', {
+                    value: formatConnectionDuration(alternative.durationMinutes) }) }}
+                </span>
+                <span class="connection-fact">
+                  🔁 {{ t('views.dashboard.events.connection.transfers', { count: alternative.transferCount }) }}
+                </span>
+              </div>
+
+              <ConnectionRouteDetails :option="alternative" :title="t('views.dashboard.events.connection.route')" />
+            </div>
           </li>
         </ul>
       </div>
@@ -394,6 +381,14 @@ const toggleExpanded = (): void => {
   flex: 0 0 auto;
 }
 
+.connection-badge-emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  font-size: 0.95rem;
+}
+
 .connection-badge-label {
   min-width: 0;
   overflow: hidden;
@@ -430,6 +425,10 @@ const toggleExpanded = (): void => {
   gap: 8px;
 }
 
+.connection-facts--alternative {
+  margin-bottom: 2px;
+}
+
 .connection-fact {
   display: inline-flex;
   align-items: center;
@@ -441,7 +440,25 @@ const toggleExpanded = (): void => {
   font-size: 0.85rem;
 }
 
-.connection-route {
+.connection-alternatives {
+  display: grid;
+  gap: 10px;
+}
+
+.connection-alternatives-title {
+  font-size: 0.92rem;
+  color: #7f1d1d;
+}
+
+.connection-alternatives-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.connection-alternative {
   display: grid;
   gap: 10px;
   padding: 12px;
@@ -449,185 +466,83 @@ const toggleExpanded = (): void => {
   background: rgba(255, 255, 255, 0.62);
 }
 
-.connection-route-title {
-  font-size: 0.92rem;
-  color: #7f1d1d;
-}
-
-.connection-route-list {
+.connection-alternative-summary {
   display: grid;
-  gap: 0;
-  margin: 0;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  border: 0;
+  background: transparent;
   padding: 0;
-  list-style: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
 }
 
-.connection-route-item {
-  min-width: 0;
-}
-
-.connection-route-marker {
+.connection-alternative-main,
+.connection-alternative-side {
   display: grid;
-  grid-template-rows: auto 1fr;
-  justify-items: center;
-  align-self: stretch;
-}
-
-.connection-route-marker--end {
-  grid-template-rows: auto;
-}
-
-.connection-route-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  background: #be123c;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9);
-}
-
-.connection-route-rail {
-  width: 3px;
-  min-height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(190, 24, 93, 0.75), rgba(190, 24, 93, 0.18));
-}
-
-.connection-route-content {
-  display: grid;
-  gap: 6px;
-  padding-bottom: 14px;
-}
-
-.connection-route-stop {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
+  gap: 4px;
   min-width: 0;
 }
 
-.connection-route-stop--start {
-  align-items: start;
+.connection-alternative-time,
+.connection-alternative-arrival {
+  font-weight: 700;
 }
 
-.connection-route-stop-name {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  font-size: 0.84rem;
-  color: #4b5563;
-}
-
-.connection-route-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-
-.connection-route-labels {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.connection-product-icon {
-  flex: 0 0 auto;
-}
-
-.connection-route-line {
-  min-width: 0;
-  overflow-wrap: anywhere;
+.connection-alternative-arrival {
   color: #111827;
 }
 
-.connection-route-times,
-.connection-transfer {
-  font-size: 0.84rem;
-  color: #4b5563;
+.connection-alternative-side {
+  justify-items: end;
 }
 
-.connection-transfer {
-  margin: 0;
-  color: #9f1239;
-  font-weight: 600;
-}
-
-.connection-alternatives {
-  display: grid;
-  gap: 8px;
-  padding-top: 4px;
-}
-
-.connection-alternatives-title {
-  font-size: 0.9rem;
-  color: #7f1d1d;
-}
-
-.connection-alternatives-list {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.connection-alternative {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, max-content));
-  gap: 8px 12px;
-  align-items: center;
-  min-width: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.68);
-}
-
-.connection-alternative-time {
-  font-weight: 700;
-  color: #7f1d1d;
-}
-
-.connection-alternative-arrival,
 .connection-alternative-meta {
-  min-width: 0;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: #4b5563;
-  overflow-wrap: anywhere;
 }
 
-.connection-sharing-inline {
-  margin-top: 4px;
+.connection-alternative-details {
+  display: grid;
+  gap: 10px;
 }
 
 .connection-updated {
   margin: 0;
-  font-size: 0.78rem;
   color: #6b7280;
+  font-size: 0.8rem;
 }
 
 @media (max-width: 720px) {
-
   .connection-topline,
-  .connection-route-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .connection-visual,
-  .connection-stops,
-  .connection-alternative {
-    grid-template-columns: 1fr;
+  .connection-alternative-summary {
+    grid-template-columns: minmax(0, 1fr);
     display: grid;
   }
 
-  .connection-stops span:last-child {
-    text-align: left;
+  .connection-topline-meta {
+    justify-content: flex-start;
   }
 
-  .connection-toggle-label {
-    display: none;
+  .connection-visual {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .connection-time:last-child {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .connection-stops {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .connection-stops span:last-child,
+  .connection-alternative-side {
+    text-align: left;
+    justify-items: start;
   }
 }
 </style>

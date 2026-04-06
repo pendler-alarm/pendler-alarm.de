@@ -1,5 +1,6 @@
+ 
 import { getLocale, translate } from '@/i18n';
-import { incrementApiMetric } from '@/lib/api-metrics';
+import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
 import { MOTIS_API_PLAN } from '@/utils/constants/api';
 import { createPlaceQuery, type Coordinates } from './location-service';
 
@@ -55,7 +56,11 @@ type FetchConnectionOptions = {
 };
 
 type MotisPlace = {
+  stopId?: string;
   name?: string;
+  lat?: number;
+  lon?: number;
+  level?: number;
   departure?: string;
   arrival?: string;
   scheduledDeparture?: string;
@@ -70,6 +75,7 @@ type MotisLeg = {
   arrival?: string;
   scheduledDeparture?: string;
   scheduledArrival?: string;
+  duration?: number;
   realTime?: boolean;
   cancelled?: boolean;
   tripCancelled?: boolean;
@@ -97,7 +103,10 @@ type MotisPlanResponse =
   };
 
 const nonTransitModes = new Set(['WALK', 'BIKE', 'CAR', 'CAR_PARKING', 'CAR_DROPOFF', 'RENTAL']);
+const displayNonTransitModes = new Set(['WALK']);
 const DEFAULT_MAX_CONNECTIONS = 3;
+const WALK_TRANSFER_DISTANCE_THRESHOLD_METERS = 180;
+const WALK_TRANSFER_DURATION_THRESHOLD_SECONDS = 180;
 const tramLinePattern = /\b(tram|str|m\d{1,2})\b/i;
 const sbahnPattern = /\bs\s?\d{1,2}\b/i;
 const ubahnPattern = /\bu\s?\d{1,2}\b/i;
@@ -119,17 +128,31 @@ const formatTime = (value?: string): string => {
 const formatModeName = (mode?: string): string =>
   mode?.replaceAll('_', ' ').trim() || translate('calendar.connection.modeUnknown');
 
-const getLegLabel = (leg: MotisLeg): string =>
-  leg.displayName?.trim()
-  || leg.routeShortName?.trim()
-  || leg.headsign?.trim()
-  || formatModeName(leg.mode);
+const getLegLabel = (leg: MotisLeg): string => {
+  const mode = leg.mode?.toUpperCase().trim() ?? '';
 
-const getLegLineLabel = (leg: MotisLeg): string =>
-  leg.routeShortName?.trim()
-  || leg.displayName?.trim()
-  || leg.headsign?.trim()
-  || formatModeName(leg.mode);
+  if (mode === 'WALK') {
+    return 'Fußweg';
+  }
+
+  return leg.displayName?.trim()
+    || leg.routeShortName?.trim()
+    || leg.headsign?.trim()
+    || formatModeName(leg.mode);
+};
+
+const getLegLineLabel = (leg: MotisLeg): string => {
+  const mode = leg.mode?.toUpperCase().trim() ?? '';
+
+  if (mode === 'WALK') {
+    return 'Fußweg';
+  }
+
+  return leg.routeShortName?.trim()
+    || leg.displayName?.trim()
+    || leg.headsign?.trim()
+    || formatModeName(leg.mode);
+};
 
 const uniqueLabels = (labels: string[]): string[] => Array.from(new Set(labels));
 
@@ -215,23 +238,118 @@ const getTransportModes = (itinerary: MotisItinerary): string[] => {
 const getStopName = (value?: string): string =>
   value?.trim() || translate('calendar.connection.stopUnknown');
 
+const normalizeStopKey = (place?: MotisPlace): string | null =>
+  place?.stopId?.trim() || place?.name?.trim().toLowerCase() || null;
+
+const getPlaceCoordinates = (place?: MotisPlace): Coordinates | null => (
+  typeof place?.lat === 'number' && typeof place?.lon === 'number'
+    ? { lat: place.lat, lon: place.lon }
+    : null
+);
+
+const getDistanceMeters = (from: Coordinates, to: Coordinates): number => {
+  const earthRadiusMeters = 6_371_000;
+  const toRad = (value: number): number => value * (Math.PI / 180);
+  const dLat = toRad(to.lat - from.lat);
+  const dLon = toRad(to.lon - from.lon);
+  const lat1 = toRad(from.lat);
+  const lat2 = toRad(to.lat);
+  const haversine = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+};
+
+const isTransitLeg = (leg?: MotisLeg | null): boolean => {
+  const mode = leg?.mode?.toUpperCase().trim() ?? '';
+
+  return Boolean(leg) && !nonTransitModes.has(mode);
+};
+
+const hasMeaningfulWalkTransfer = (walkLeg: MotisLeg, previousLeg?: MotisLeg | null, nextLeg?: MotisLeg | null): boolean => {
+  if (!previousLeg || !nextLeg) {
+    return true;
+  }
+
+  const previousStop = previousLeg.to;
+  const nextStop = nextLeg.from;
+
+  if (!previousStop || !nextStop) {
+    return true;
+  }
+
+  const previousKey = normalizeStopKey(previousStop);
+  const nextKey = normalizeStopKey(nextStop);
+
+  if (previousKey && nextKey && previousKey !== nextKey) {
+    return true;
+  }
+
+  if (typeof previousStop.level === 'number' && typeof nextStop.level === 'number' && previousStop.level !== nextStop.level) {
+    return true;
+  }
+
+  const previousCoordinates = getPlaceCoordinates(previousStop);
+  const nextCoordinates = getPlaceCoordinates(nextStop);
+
+  if (previousCoordinates && nextCoordinates) {
+    return getDistanceMeters(previousCoordinates, nextCoordinates) >= WALK_TRANSFER_DISTANCE_THRESHOLD_METERS;
+  }
+
+  return (walkLeg.duration ?? 0) >= WALK_TRANSFER_DURATION_THRESHOLD_SECONDS;
+};
+
+const shouldIncludeSegment = (legs: MotisLeg[], index: number, leg: MotisLeg): boolean => {
+  const mode = leg.mode?.toUpperCase().trim() ?? '';
+
+  if (!nonTransitModes.has(mode)) {
+    return true;
+  }
+
+  if (!displayNonTransitModes.has(mode)) {
+    return false;
+  }
+
+  const previousLeg = index > 0 ? legs[index - 1] ?? null : null;
+  const nextLeg = index < legs.length - 1 ? legs[index + 1] ?? null : null;
+  const isInternalTransferWalk = isTransitLeg(previousLeg) && isTransitLeg(nextLeg);
+
+  if (!isInternalTransferWalk) {
+    return true;
+  }
+
+  return hasMeaningfulWalkTransfer(leg, previousLeg, nextLeg);
+};
+
 const getProductType = (leg: MotisLeg): ConnectionProductType => {
   const mode = leg.mode?.toUpperCase().trim() ?? '';
   const label = getLegLineLabel(leg);
 
-  if (mode == 'SUBWAY' || ubahnPattern.test(label)) {
+  if (mode === 'SUBWAY' || mode === 'METRO' || ubahnPattern.test(label)) {
     return 'ubahn';
   }
 
-  if (mode == 'TRAM' || mode == 'LIGHT_RAIL' || tramLinePattern.test(label)) {
+  if (mode === 'SUBURBAN' || sbahnPattern.test(label)) {
+    return 'sbahn';
+  }
+
+  if (mode === 'TRAM' || mode === 'LIGHT_RAIL' || tramLinePattern.test(label)) {
     return 'tram';
   }
 
-  if (mode == 'BUS' || mode == 'COACH') {
+  if (mode === 'BUS' || mode === 'COACH') {
     return 'bus';
   }
 
-  if (mode == 'RAIL') {
+  if (mode === 'REGIONAL_RAIL' || mode === 'REGIONAL_FAST_RAIL') {
+    return 'regio';
+  }
+
+  if (mode === 'LONG_DISTANCE' || mode === 'HIGHSPEED_RAIL' || mode === 'NIGHT_RAIL') {
+    return 'train';
+  }
+
+  if (mode === 'RAIL' || mode === 'TRANSIT') {
     if (sbahnPattern.test(label)) {
       return 'sbahn';
     }
@@ -260,6 +378,8 @@ const getProductLabel = (type: ConnectionProductType): string => {
       return 'Regio';
     case 'train':
       return 'Bahn';
+    case 'walk':
+      return 'Fußweg';
     default:
       return 'Weg';
   }
@@ -269,7 +389,7 @@ const getSegments = (itinerary: MotisItinerary): ConnectionSegment[] => {
   const legs = Array.isArray(itinerary.legs) ? itinerary.legs : [];
 
   return legs
-    .filter((leg) => !nonTransitModes.has(leg.mode ?? ''))
+    .filter((leg, index) => shouldIncludeSegment(legs, index, leg))
     .map((leg, index) => {
       const departureIso = leg.departure ?? leg.from?.departure ?? null;
       const arrivalIso = leg.arrival ?? leg.to?.arrival ?? null;
@@ -389,19 +509,60 @@ export const fetchNextConnection = async (
     params.append('searchWindow', `${options.searchWindowMinutes}m`);
   }
 
-  incrementApiMetric('motis');
-
-  const response = await fetch(`${MOTIS_API_PLAN}?${params.toString()}`, {
-    headers: {
+  const url = `${MOTIS_API_PLAN}?${params.toString()}`;
+  const query = Object.fromEntries(params.entries());
+  const requestId = startApiRequest('motis', 'plan', {
+    method: 'GET',
+    url,
+    query,
+    requestJson: query,
+    requestHeaders: {
       Accept: 'application/json',
     },
   });
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+  } catch (error) {
+    finishApiRequest(requestId, 'error', null, {
+      errorKind: 'network',
+      errorMessage: error instanceof Error ? error.message : translate('views.dashboard.events.debug.history.errors.unknownFetch'),
+    });
+    throw error;
+  }
+
+  let payload: unknown;
+
+  try {
+    payload = (await response.json()) as unknown;
+  } catch (error) {
+    finishApiRequest(requestId, 'error', response.status, {
+      errorKind: 'invalid-json',
+      errorMessage: error instanceof Error ? error.message : translate('views.dashboard.events.debug.history.errors.invalidJson'),
+    });
+    throw error;
+  }
 
   if (!response.ok) {
+    finishApiRequest(requestId, 'error', response.status, {
+      responseJson: payload,
+      errorKind: 'http',
+      errorMessage: translate('calendar.connection.loadFailed', { status: response.status }),
+    });
     throw new Error(translate('calendar.connection.loadFailed', { status: response.status }));
   }
 
-  const payload = (await response.json()) as unknown;
+  finishApiRequest(requestId, 'success', response.status, {
+    responseJson: payload,
+    responseHeaders: {
+      'content-type': response.headers.get('content-type') ?? '',
+    },
+  });
 
   if (!isObject(payload) && !Array.isArray(payload)) {
     return null;

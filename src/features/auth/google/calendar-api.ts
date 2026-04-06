@@ -1,5 +1,6 @@
+/* eslint-disable local-i18n/no-hardcoded-text */
 import { getLocale, translate } from '@/i18n';
-import { incrementApiMetric } from '@/lib/api-metrics';
+import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
 import { fetchNextConnection, type ConnectionSummary } from '@/features/motis/routing-service';
 import {
   formatCoordinates,
@@ -265,23 +266,65 @@ export const fetchUpcomingCalendarEvents = async (
     singleEvents: 'true',
     timeMin: new Date().toISOString(),
   });
-  incrementApiMetric('googleCalendar');
-
-  const response = await fetch(
-    `${GOOGLE_API_CALENDAR_EVENTS}?${params.toString()}`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-      },
+  const url = `${GOOGLE_API_CALENDAR_EVENTS}?${params.toString()}`;
+  const query = Object.fromEntries(params.entries());
+  const requestId = startApiRequest('googleCalendar', 'events', {
+    method: 'GET',
+    url,
+    query,
+    requestJson: query,
+    requestHeaders: {
+      Accept: 'application/json',
+      Authorization: 'Bearer [redacted]',
     },
-  );
+  });
+  let response: Response;
+
+  try {
+    response = await fetch(
+      url,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+      },
+    );
+  } catch (error) {
+    finishApiRequest(requestId, 'error', null, {
+      errorKind: 'network',
+      errorMessage: error instanceof Error ? error.message : translate('views.dashboard.events.debug.history.errors.unknownFetch'),
+    });
+    throw error;
+  }
+
+  let data: CalendarApiResponse;
+
+  try {
+    data = (await response.json()) as CalendarApiResponse;
+  } catch (error) {
+    finishApiRequest(requestId, 'error', response.status, {
+      errorKind: 'invalid-json',
+      errorMessage: error instanceof Error ? error.message : translate('views.dashboard.events.debug.history.errors.invalidJson'),
+    });
+    throw error;
+  }
 
   if (!response.ok) {
+    finishApiRequest(requestId, 'error', response.status, {
+      responseJson: data,
+      errorKind: 'http',
+      errorMessage: translate('calendar.error.loadFailed', { status: response.status }),
+    });
     throw new Error(translate('calendar.error.loadFailed', { status: response.status }));
   }
 
-  const data = (await response.json()) as CalendarApiResponse;
+  finishApiRequest(requestId, 'success', response.status, {
+    responseJson: data,
+    responseHeaders: {
+      'content-type': response.headers.get('content-type') ?? '',
+    },
+  });
   const upcomingEvents = (data.items ?? []).slice(0, Number(CALENDAR_FETCH_RESULTS));
 
   const normalizedEvents = await Promise.all(
