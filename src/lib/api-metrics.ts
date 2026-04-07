@@ -194,16 +194,16 @@ const mergePayload = (
     ...current,
     ...normalizedPatch,
     query: {
-      ...(current.query ?? {}),
-      ...(normalizedPatch.query ?? {}),
+      ...current.query,
+      ...normalizedPatch.query,
     },
     requestHeaders: {
-      ...(current.requestHeaders ?? {}),
-      ...(normalizedPatch.requestHeaders ?? {}),
+      ...current.requestHeaders,
+      ...normalizedPatch.requestHeaders,
     },
     responseHeaders: {
-      ...(current.responseHeaders ?? {}),
-      ...(normalizedPatch.responseHeaders ?? {}),
+      ...current.responseHeaders,
+      ...normalizedPatch.responseHeaders,
     },
   };
 };

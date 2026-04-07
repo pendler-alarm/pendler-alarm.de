@@ -322,6 +322,10 @@ const getDebugRequestLabel = (entry: ApiRequestHistoryEntry): string => {
     return t('views.dashboard.events.debug.history.motisPlan');
   }
 
+  if (entry.type === 'motis' && entry.label === 'delay-prediction') {
+    return t('views.dashboard.events.debug.history.motisDelayPrediction');
+  }
+
   if (entry.type === 'motis' && entry.label === 'geocode') {
     return t('views.dashboard.events.debug.history.motisGeocode');
   }
@@ -740,7 +744,7 @@ const refreshSharingSuggestions = async (eventIds?: string[]): Promise<void> => 
     );
 
     updateEvent(event.id, {
-      sharingSuggestion: suggestion,
+      sharingSuggestion: suggestion ?? (error ? event.sharingSuggestion : null),
       sharingError: error,
     });
   }));
@@ -843,7 +847,7 @@ const loadSharingSuggestions = async (
     }
 
     updateEvent(event.id, {
-      sharingSuggestion: suggestion,
+      sharingSuggestion: suggestion ?? (error ? event.sharingSuggestion : null),
       sharingError: error,
     });
   }));
@@ -1185,6 +1189,8 @@ watch(showTransferWalkNodes, () => {
             :expanded="isConnectionExpanded(event.id)"
             :sharing-suggestion="event.sharingSuggestion"
             :deutschlandticket-enabled="deutschlandticketEnabled"
+            :origin-address="currentLocation?.address ?? null"
+            :destination-address="event.locationAddress"
             @toggle="toggleConnection(event.id)"
           />
 

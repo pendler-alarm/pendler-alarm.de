@@ -1,6 +1,8 @@
 /* eslint-disable local-i18n/no-hardcoded-text */
 import { getLocale, translate } from '@/i18n';
 import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
+import { fetchDelayPrediction } from '@/features/motis/delay-service';
+import { resolveWorkflowStationIfopt } from '@/features/motis/station-registry-service';
 import { fetchNextConnection, type ConnectionSummary } from '@/features/motis/routing-service';
 import {
   formatCoordinates,
@@ -26,6 +28,7 @@ export type GoogleCalendarEvent = {
   connectionError: string | null;
   connectionFetchedAt: string | null;
   sharingSuggestion: SharingSuggestion | null;
+  delayPrediction: ConnectionSummary['delayPrediction'];
   sharingError: string | null;
 };
 
@@ -54,6 +57,17 @@ const DEFAULT_TIME_ZONE = 'Europe/Berlin';
 const MAX_CONNECTION_OPTIONS = 3;
 const CONNECTION_SEARCH_WINDOW_MINUTES = 120;
 const CALENDAR_FETCH_RESULTS = String(Math.max(Number(MAX_EVENT_RESULTS) * 4, Number(MAX_EVENT_RESULTS)));
+
+const normalizeStationDhid = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  const match = trimmed.match(/([a-z]{2}:\d+:\d+)/i);
+
+  return match?.[1]?.toLowerCase() ?? null;
+};
 
 const getEventTimeZone = (start?: { timeZone?: string }): string => start?.timeZone?.trim() || DEFAULT_TIME_ZONE;
 
@@ -183,6 +197,7 @@ const createBaseEvent = async (
     connectionError: null,
     connectionFetchedAt: null,
     sharingSuggestion: null,
+    delayPrediction: null,
     sharingError: null,
   };
 };
@@ -245,12 +260,32 @@ export const fetchEventConnection = async (
       showTransferWalkNodes: options.showTransferWalkNodes,
     });
 
-    return connection
-      ? { connection, connectionError: null }
-      : {
-        connection: null,
-        connectionError: translate('calendar.connection.noneFound'),
+    if (connection) {
+      const destinationSegment = [...connection.segments]
+        .reverse()
+        .find((segment) => segment.productType !== 'walk') ?? null;
+      const destinationStopId = normalizeStationDhid(destinationSegment?.toStopId ?? null);
+      const workflowStationIfopt = destinationSegment
+        ? await resolveWorkflowStationIfopt(destinationSegment.toStop, destinationSegment.toCoordinates)
+        : null;
+      const delayStationId = destinationStopId ?? workflowStationIfopt;
+      const delayPrediction = delayStationId && connection.departureIso
+        ? await fetchDelayPrediction(origin.coordinates, delayStationId, connection.departureIso)
+        : null;
+
+      return {
+        connection: {
+          ...connection,
+          delayPrediction,
+        },
+        connectionError: null,
       };
+    }
+
+    return {
+      connection: null,
+      connectionError: translate('calendar.connection.noneFound'),
+    };
   } catch (error) {
     return {
       connection: null,

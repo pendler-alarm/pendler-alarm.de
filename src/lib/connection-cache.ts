@@ -10,7 +10,7 @@ type ConnectionCacheEntry = {
   history: CachedConnection[];
 };
 
-const STORAGE_KEY = 'pendler_alarm_connection_cache_v1';
+const STORAGE_KEY = 'pendler_alarm_connection_cache_v2';
 const MAX_HISTORY = 6;
 
 const loadCache = (): Record<string, ConnectionCacheEntry> => {

@@ -32,6 +32,85 @@ export const formatConnectionDuration = (durationMinutes: number | null): string
   return `${hours} h ${minutes} min`;
 };
 
+export const formatDistanceMeters = (meters: number | null): string | null => {
+  if (meters === null || !Number.isFinite(meters)) {
+    return null;
+  }
+
+  if (meters >= 1000) {
+    return `${(meters / 1000).toFixed(meters >= 10_000 ? 0 : 1)} km`;
+  }
+
+  return `${String(Math.round(meters))} m`;
+};
+
+export const formatDelayMinutes = (delayMinutes: number | null): string | null => {
+  if (delayMinutes === null || !Number.isFinite(delayMinutes)) {
+    return null;
+  }
+
+  const rounded = Math.round(delayMinutes * 10) / 10;
+
+  if (rounded === 0) {
+    return translate('views.dashboard.events.connection.delayNoChange');
+  }
+
+  return `${rounded > 0 ? '+' : ''}${String(rounded)} min`;
+};
+
+export const formatProbability = (value: number | null): string | null => {
+  if (value === null || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return `${String(Math.round(value * 100))} %`;
+};
+
+const normalizeStationSlug = (value: string): string => value
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[+&]/g, ' ')
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '');
+
+const looksLikeDbStation = (stopName: string): boolean => {
+  const normalized = stopName.trim().toLowerCase();
+
+  return /\b(hbf|hauptbahnhof|bahnhof|bhf)\b/u.test(normalized)
+    || /^s\s/iu.test(normalized)
+    || /^s\+u\s/iu.test(normalized)
+    || /^u\+s\s/iu.test(normalized);
+};
+
+export const buildBahnhofStationUrl = (stopName: string): string => {
+  const params = new URLSearchParams({
+    query: stopName,
+  });
+
+  return `https://www.bahnhof.de/suche?${params.toString()}`;
+};
+
+export const buildBvgStationUrl = (stopName: string): string => (
+  `https://www.bvg.de/en/connections/station-overview/${normalizeStationSlug(stopName)}`
+);
+
+export const buildStationInfoUrl = (stopName: string, stopId?: string | null): string => {
+  const normalizedStopId = stopId?.trim().toLowerCase() ?? '';
+
+  if (looksLikeDbStation(stopName) || normalizedStopId.startsWith('de:80')) {
+    return buildBahnhofStationUrl(stopName);
+  }
+
+  return buildBvgStationUrl(stopName);
+};
+
+export const getStationInfoProviderLabel = (stopName: string, stopId?: string | null): string => (
+  looksLikeDbStation(stopName) || (stopId?.trim().toLowerCase() ?? '').startsWith('de:80')
+    ? 'bahnhof.de'
+    : 'BVG'
+);
+
 export const getConnectionLeadMinutes = (
   eventStartIso: string | null,
   connection: ConnectionOption | null | undefined,
@@ -141,7 +220,6 @@ export const formatConnectionServiceLabel = (segment: ConnectionSegment): string
 
   return `${productLabel} ${lineLabel}`;
 };
-
 
 const bahnBookableModes: ConnectionProductType[] = ['train', 'ice', 'ic'];
 const deutschlandticketModes: ConnectionProductType[] = ['regio', 'sbahn', 'ubahn', 'bus', 'tram'];

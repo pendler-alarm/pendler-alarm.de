@@ -30,6 +30,8 @@ const props = defineProps<{
   deutschlandticketEnabled?: boolean;
   bahnBookingClass?: '1' | '2';
   bahnTravelerProfileParam?: string;
+  originAddress?: string | null;
+  destinationAddress?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -102,6 +104,35 @@ const toggleAlternative = (alternativeKey: string): void => {
 
 const isAlternativeExpanded = (alternativeKey: string): boolean => expandedAlternatives.value.has(alternativeKey);
 
+const selectedRoute = ref<'plan' | 'alternative'>('plan');
+
+const riskyTransfer = computed(() => props.connection.delayPrediction?.transferAssessments
+  .filter((assessment) => assessment.successProbability !== null)
+  .sort((left, right) => (left.successProbability ?? 1) - (right.successProbability ?? 1))[0] ?? null);
+
+const suggestedAlternative = computed(() => props.connection.alternatives[0] ?? null);
+const showRouteToggle = computed(() => Boolean(suggestedAlternative.value));
+
+const routeOption = computed(() => (
+  showRouteToggle.value && selectedRoute.value === 'alternative'
+    ? suggestedAlternative.value ?? props.connection
+    : props.connection
+));
+
+const routeDelayPrediction = computed(() => (
+  showRouteToggle.value && selectedRoute.value === 'alternative'
+    ? null
+    : props.connection.delayPrediction ?? null
+));
+
+const routeRiskLabel = computed(() => {
+  if (!riskyTransfer.value?.successProbability && riskyTransfer.value?.successProbability !== 0) {
+    return null;
+  }
+
+  return `${Math.round(riskyTransfer.value.successProbability * 100)} %`;
+});
+
 const toggleExpanded = (): void => {
   emit('toggle');
 };
@@ -126,12 +157,13 @@ const toggleExpanded = (): void => {
               : t('views.dashboard.events.connection.onTime')
           }}
         </span>
+
+        <span v-if="connection.delayPrediction" class="connection-status connection-status--prediction">
+          {{ t('views.dashboard.events.connection.delayAvailableBadge') }}
+        </span>
         <button type="button" class="connection-toggle" :aria-expanded="isExpanded" @click="toggleExpanded">
-          <SvgIcon
-            :icon="isExpanded ? 'material/expand_less' : 'material/expand_more'"
-            :dimension="18"
-            aria-hidden="true"
-          />
+          <SvgIcon :icon="isExpanded ? 'material/expand_less' : 'material/expand_more'" :dimension="18"
+            aria-hidden="true" />
           <span class="connection-toggle-label">
             {{
               isExpanded
@@ -149,19 +181,11 @@ const toggleExpanded = (): void => {
         <div class="connection-badges">
           <template v-if="hasSegments">
             <span v-for="segment in connection.segments" :key="segment.id" class="connection-badge">
-              <span
-                v-if="getConnectionProductEmoji(segment.productType)"
-                class="connection-badge-emoji"
-                aria-hidden="true"
-              >{{ getConnectionProductEmoji(segment.productType) }}</span>
-              <SvgIcon
-                v-else
-                class="connection-badge-icon"
+              <span v-if="getConnectionProductEmoji(segment.productType)" class="connection-badge-emoji"
+                aria-hidden="true">{{ getConnectionProductEmoji(segment.productType) }}</span>
+              <SvgIcon v-else class="connection-badge-icon"
                 :icon="getConnectionProductIcon(segment.productType) ?? 'products/BAHN'"
-                :fallback-text="getConnectionProductFallbackLabel(segment.productType)"
-                :width="44"
-                :height="20"
-              />
+                :fallback-text="getConnectionProductFallbackLabel(segment.productType)" :width="44" :height="20" />
               <span class="connection-badge-label">{{ segment.lineLabel }}</span>
             </span>
           </template>
@@ -174,21 +198,13 @@ const toggleExpanded = (): void => {
       <strong class="connection-time">{{ connection.arrivalTime }}</strong>
     </div>
 
-    <div
-      v-if="deutschlandticketAvailable || bahnBookingUrl"
-      class="connection-ticket-actions"
-    >
+    <div v-if="deutschlandticketAvailable || bahnBookingUrl" class="connection-ticket-actions">
       <span v-if="deutschlandticketAvailable" class="connection-ticket-badge">
         <span class="connection-ticket-badge-logo" aria-hidden="true">🎫</span>
         <span>{{ t('views.dashboard.events.connection.deutschlandticketInfo') }}</span>
       </span>
-      <a
-        v-if="bahnBookingUrl"
-        class="connection-booking-link"
-        :href="bahnBookingUrl"
-        target="_blank"
-        rel="noreferrer noopener"
-      >
+      <a v-if="bahnBookingUrl" class="connection-booking-link" :href="bahnBookingUrl" target="_blank"
+        rel="noreferrer noopener">
         <SvgIcon icon="material/open_in_new" :dimension="16" aria-hidden="true" />
         <span>{{ t('views.dashboard.events.connection.bookTrainTicket') }}</span>
       </a>
@@ -203,7 +219,8 @@ const toggleExpanded = (): void => {
       <div class="connection-facts">
         <span class="connection-fact">
           ⏱️ {{ t('views.dashboard.events.connection.duration', {
-            value: formatConnectionDuration(connection.durationMinutes) }) }}
+            value: formatConnectionDuration(connection.durationMinutes)
+          }) }}
         </span>
         <span class="connection-fact">
           🔁 {{ t('views.dashboard.events.connection.transfers', { count: connection.transferCount }) }}
@@ -213,28 +230,50 @@ const toggleExpanded = (): void => {
         </span>
       </div>
 
-      <ConnectionRouteDetails
-        v-if="hasSegments"
-        :option="connection"
-        :title="t('views.dashboard.events.connection.route')"
-      />
+      <div v-if="showRouteToggle" class="connection-route-switch">
+        <button
+          type="button"
+          class="connection-route-switch-button"
+          :class="{ 'connection-route-switch-button--active': selectedRoute === 'plan' }"
+          @click="selectedRoute = 'plan'"
+        >
+          {{ t('views.dashboard.events.connection.delayRoutePlan') }}
+        </button>
+        <button
+          type="button"
+          class="connection-route-switch-button"
+          :class="{ 'connection-route-switch-button--active': selectedRoute === 'alternative' }"
+          @click="selectedRoute = 'alternative'"
+        >
+          {{ t('views.dashboard.events.connection.delayRouteAlternative') }}
+        </button>
+      </div>
+
+      <p v-if="riskyTransfer && routeRiskLabel" class="connection-route-switch-note">
+        {{ t('views.dashboard.events.connection.delayAlternativeHint', {
+          from: riskyTransfer.fromStopName,
+          to: riskyTransfer.toStopName,
+          value: routeRiskLabel,
+        }) }}
+      </p>
+
+      <ConnectionRouteDetails v-if="hasSegments" :option="routeOption"
+        :delay-prediction="routeDelayPrediction"
+        :origin-address="originAddress"
+        :destination-address="destinationAddress"
+        :title="showRouteToggle ? (selectedRoute === 'plan' ? t('views.dashboard.events.connection.delayRoutePlan') : t('views.dashboard.events.connection.delayRouteAlternative')) : t('views.dashboard.events.connection.route')" />
+
 
       <div v-if="connection.alternatives.length > 0" class="connection-alternatives">
         <strong class="connection-alternatives-title">
           {{ t('views.dashboard.events.connection.earlierOptions') }}
         </strong>
         <ul class="connection-alternatives-list">
-          <li
-            v-for="alternative in connection.alternatives"
-            :key="getAlternativeKey(alternative)"
-            class="connection-alternative"
-          >
-            <button
-              type="button"
-              class="connection-alternative-summary"
+          <li v-for="alternative in connection.alternatives" :key="getAlternativeKey(alternative)"
+            class="connection-alternative">
+            <button type="button" class="connection-alternative-summary"
               :aria-expanded="isAlternativeExpanded(getAlternativeKey(alternative))"
-              @click="toggleAlternative(getAlternativeKey(alternative))"
-            >
+              @click="toggleAlternative(getAlternativeKey(alternative))">
               <span class="connection-alternative-main">
                 <span class="connection-alternative-time">
                   {{ t('views.dashboard.events.connection.leaveAt', { time: alternative.departureTime }) }}
@@ -249,21 +288,23 @@ const toggleExpanded = (): void => {
                   {{ getAlternativeLeadLabel(alternative) }}
                 </span>
                 <span class="connection-alternative-meta">
-                  {{ t('views.dashboard.events.connection.duration', { value: formatConnectionDuration(alternative.durationMinutes) }) }}
+                  {{ t('views.dashboard.events.connection.duration', {
+                    value:
+                      formatConnectionDuration(alternative.durationMinutes)
+                  }) }}
                 </span>
               </span>
               <SvgIcon
                 :icon="isAlternativeExpanded(getAlternativeKey(alternative)) ? 'material/expand_less' : 'material/expand_more'"
-                :dimension="18"
-                aria-hidden="true"
-              />
+                :dimension="18" aria-hidden="true" />
             </button>
 
             <div v-if="isAlternativeExpanded(getAlternativeKey(alternative))" class="connection-alternative-details">
               <div class="connection-facts connection-facts--alternative">
                 <span class="connection-fact">
                   ⏱️ {{ t('views.dashboard.events.connection.duration', {
-                    value: formatConnectionDuration(alternative.durationMinutes) }) }}
+                    value: formatConnectionDuration(alternative.durationMinutes)
+                  }) }}
                 </span>
                 <span class="connection-fact">
                   🔁 {{ t('views.dashboard.events.connection.transfers', { count: alternative.transferCount }) }}
@@ -276,12 +317,8 @@ const toggleExpanded = (): void => {
         </ul>
       </div>
 
-      <SharingOptionCard
-        v-if="sharingSuggestion"
-        class="connection-sharing-inline"
-        :suggestion="sharingSuggestion"
-        :compact="true"
-      />
+      <SharingOptionCard v-if="sharingSuggestion" class="connection-sharing-inline" :suggestion="sharingSuggestion"
+        :compact="true" />
 
       <p v-if="formattedUpdatedAt" class="connection-updated">
         {{ t('views.dashboard.events.connection.updatedAt', { time: formattedUpdatedAt }) }}
@@ -353,6 +390,12 @@ const toggleExpanded = (): void => {
   color: #92400e;
   background: rgba(254, 243, 199, 0.96);
   border: 1px solid rgba(245, 158, 11, 0.26);
+}
+
+.connection-status--prediction {
+  color: #1d4ed8;
+  background: rgba(219, 234, 254, 0.96);
+  border: 1px solid rgba(96, 165, 250, 0.28);
 }
 
 .connection-toggle {
@@ -514,6 +557,35 @@ const toggleExpanded = (): void => {
   margin-bottom: 2px;
 }
 
+.connection-route-switch {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.connection-route-switch-button {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.88);
+  color: #334155;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.connection-route-switch-button--active {
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+}
+
+.connection-route-switch-note {
+  margin: -4px 0 0;
+  color: #9a3412;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
 .connection-fact {
   display: inline-flex;
   align-items: center;
@@ -601,6 +673,7 @@ const toggleExpanded = (): void => {
 }
 
 @media (max-width: 720px) {
+
   .connection-topline,
   .connection-alternative-summary {
     grid-template-columns: minmax(0, 1fr);

@@ -3,23 +3,43 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import SvgIcon from '@/components/SvgIcon.vue';
 import {
+  buildStationInfoUrl,
   formatConnectionServiceLabel,
+  formatDelayMinutes,
+  formatDistanceMeters,
+  formatProbability,
   getConnectionProductEmoji,
   getConnectionProductFallbackLabel,
   getConnectionProductIcon,
+  getStationInfoProviderLabel,
 } from '@/components/connection/connection-utils';
+import { getDistanceMeters } from '@/features/sharing/sharing-service';
+import type { Coordinates } from '@/features/motis/location-service';
 import type {
+  ConnectionDelayCall,
+  ConnectionDelayPrediction,
   ConnectionOption,
   ConnectionSegment,
+  ConnectionTransferAssessment,
 } from '@/features/motis/routing-service';
 
 const props = defineProps<{
   option: ConnectionOption;
   title?: string;
+  delayPrediction?: ConnectionDelayPrediction | null;
+  originAddress?: string | null;
+  destinationAddress?: string | null;
 }>();
 
 const { t } = useI18n();
 const selectedStopIndex = ref<number | null>(null);
+
+type DelayBand = {
+  key: string;
+  label: string;
+  probability: number;
+  tone: 'good' | 'warn' | 'bad';
+};
 
 type RouteStopEntry = {
   key: string;
@@ -172,6 +192,364 @@ const getTransferLabel = (stop: RouteStopEntry): string | null => {
       to: formatConnectionServiceLabel(stop.outgoingSegment),
     });
 };
+
+const getTransferCoordinates = (stop: RouteStopEntry): { from: Coordinates | null; to: Coordinates | null } | null => {
+  const transferWalk = stop.outgoingSegment?.productType === 'walk' ? stop.outgoingSegment : null;
+
+  if (transferWalk) {
+    return {
+      from: transferWalk.fromCoordinates,
+      to: transferWalk.toCoordinates,
+    };
+  }
+
+  if (!stop.incomingSegment || !stop.outgoingSegment) {
+    return null;
+  }
+
+  return {
+    from: stop.incomingSegment.toCoordinates,
+    to: stop.outgoingSegment.fromCoordinates,
+  };
+};
+
+const getTransferDistanceLabel = (stop: RouteStopEntry): string | null => {
+  const transferCoordinates = getTransferCoordinates(stop);
+
+  if (!transferCoordinates?.from || !transferCoordinates.to) {
+    return null;
+  }
+
+  return formatDistanceMeters(Math.round(getDistanceMeters(transferCoordinates.from, transferCoordinates.to)));
+};
+
+const getTransferRouteUrl = (stop: RouteStopEntry): string | null => {
+  const transferCoordinates = getTransferCoordinates(stop);
+
+  if (!transferCoordinates?.from || !transferCoordinates.to) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    engine: 'fossgis_osrm_foot',
+    route: `${transferCoordinates.from.lat},${transferCoordinates.from.lon};${transferCoordinates.to.lat},${transferCoordinates.to.lon}`,
+  });
+
+  return `https://www.openstreetmap.org/directions?${params.toString()}`;
+};
+
+const hasStationChange = (stop: RouteStopEntry): boolean => {
+  const transferWalk = stop.outgoingSegment?.productType === 'walk' ? stop.outgoingSegment : null;
+
+  if (transferWalk) {
+    const fromKey = transferWalk.fromStopId ?? transferWalk.fromStop.trim().toLowerCase();
+    const toKey = transferWalk.toStopId ?? transferWalk.toStop.trim().toLowerCase();
+
+    return fromKey !== toKey;
+  }
+
+  if (!stop.incomingSegment || !stop.outgoingSegment) {
+    return false;
+  }
+
+  const incomingKey = stop.incomingSegment.toStopId ?? stop.incomingSegment.toStop.trim().toLowerCase();
+  const outgoingKey = stop.outgoingSegment.fromStopId ?? stop.outgoingSegment.fromStop.trim().toLowerCase();
+
+  return incomingKey !== outgoingKey;
+};
+
+const getStopAddress = (stop: RouteStopEntry): string | null => {
+  if (stop.kind === 'start') {
+    return props.originAddress ?? null;
+  }
+
+  if (stop.kind === 'end') {
+    return props.destinationAddress ?? null;
+  }
+
+  return null;
+};
+
+const getTransitIncomingSegment = (index: number): ConnectionSegment | null => {
+  const stop = routeStops.value[index];
+
+  if (!stop) {
+    return null;
+  }
+
+  if (stop.incomingSegment?.productType !== 'walk') {
+    return stop.incomingSegment;
+  }
+
+  const previousStop = routeStops.value[index - 1] ?? null;
+  return previousStop?.incomingSegment?.productType !== 'walk' ? previousStop?.incomingSegment ?? null : null;
+};
+
+const getTransitOutgoingSegment = (index: number): ConnectionSegment | null => {
+  const stop = routeStops.value[index];
+
+  if (!stop) {
+    return null;
+  }
+
+  if (stop.outgoingSegment?.productType !== 'walk') {
+    return stop.outgoingSegment;
+  }
+
+  const nextStop = routeStops.value[index + 1] ?? null;
+  return nextStop?.outgoingSegment?.productType !== 'walk' ? nextStop?.outgoingSegment ?? null : null;
+};
+
+const getTransferAssessment = (index: number): ConnectionTransferAssessment | null => {
+  if (!props.delayPrediction) {
+    return null;
+  }
+
+  const incomingSegment = getTransitIncomingSegment(index);
+  const outgoingSegment = getTransitOutgoingSegment(index);
+
+  if (!incomingSegment || !outgoingSegment) {
+    return null;
+  }
+
+  return props.delayPrediction.transferAssessments.find((assessment) => (
+    assessment.incomingSegmentId === incomingSegment.id && assessment.outgoingSegmentId === outgoingSegment.id
+  )) ?? null;
+};
+
+const getTransferTone = (successProbability: number | null): 'good' | 'warn' | 'bad' | 'neutral' => {
+  if (successProbability === null) {
+    return 'neutral';
+  }
+
+  if (successProbability >= 0.8) {
+    return 'good';
+  }
+
+  if (successProbability >= 0.5) {
+    return 'warn';
+  }
+
+  return 'bad';
+};
+
+const getTransferFeasibilityLabel = (index: number): string | null => {
+  const assessment = getTransferAssessment(index);
+  const probability = formatProbability(assessment?.successProbability ?? null);
+
+  if (!probability) {
+    return null;
+  }
+
+  return t('views.dashboard.events.connection.transferPossibleShort', { value: probability });
+};
+
+const getPrimaryDelayCall = (index: number): ConnectionDelayCall | null => {
+  if (!props.delayPrediction) {
+    return null;
+  }
+
+  const stop = routeStops.value[index];
+
+  if (!stop) {
+    return null;
+  }
+
+  if (stop.kind === 'start' && stop.outgoingSegment) {
+    return props.delayPrediction.calls.find((call) => call.key === `${stop.outgoingSegment?.id}-departure`) ?? null;
+  }
+
+  if (stop.kind === 'end' && stop.incomingSegment) {
+    return props.delayPrediction.calls.find((call) => call.key === `${stop.incomingSegment?.id}-arrival`) ?? null;
+  }
+
+  return null;
+};
+
+const getPredictionProbability = (index: number): number | null => {
+  const stop = routeStops.value[index];
+
+  if (!stop) {
+    return null;
+  }
+
+  if (stop.kind === 'stop') {
+    return getTransferAssessment(index)?.successProbability ?? null;
+  }
+
+  return getPrimaryDelayCall(index)?.probabilityLate ?? null;
+};
+
+const getPredictionTone = (index: number): 'good' | 'warn' | 'bad' | 'neutral' => {
+  const stop = routeStops.value[index];
+
+  if (!stop) {
+    return 'neutral';
+  }
+
+  if (stop.kind === 'stop') {
+    return getTransferTone(getPredictionProbability(index));
+  }
+
+  const probability = getPredictionProbability(index);
+
+  if (probability === null) {
+    return 'neutral';
+  }
+
+  if (probability <= 0.2) {
+    return 'good';
+  }
+
+  if (probability <= 0.5) {
+    return 'warn';
+  }
+
+  return 'bad';
+};
+
+const getStopPredictionLabel = (index: number): string | null => {
+  const stop = routeStops.value[index];
+  const probability = formatProbability(getPredictionProbability(index));
+
+  if (!stop || !probability) {
+    return null;
+  }
+
+  if (stop.kind === 'start') {
+    return t('views.dashboard.events.connection.departureProbabilityShort', { value: probability });
+  }
+
+  if (stop.kind === 'end') {
+    return t('views.dashboard.events.connection.arrivalProbabilityShort', { value: probability });
+  }
+
+  return t('views.dashboard.events.connection.transferPossibleShort', { value: probability });
+};
+
+const getStopPredictionTitle = (index: number): string | null => {
+  const stop = routeStops.value[index];
+
+  if (!stop) {
+    return null;
+  }
+
+  if (stop.kind === 'start') {
+    return t('views.dashboard.events.connection.departureProbabilityLabel');
+  }
+
+  if (stop.kind === 'end') {
+    return t('views.dashboard.events.connection.arrivalProbabilityLabel');
+  }
+
+  return t('views.dashboard.events.connection.transferPossibleLabel');
+};
+
+const getStopPredictionValue = (index: number): string | null => {
+  return formatProbability(getPredictionProbability(index));
+};
+
+const getRelatedDelayCalls = (index: number): ConnectionDelayCall[] => {
+  if (!props.delayPrediction) {
+    return [];
+  }
+
+  const related: ConnectionDelayCall[] = [];
+  const incomingSegment = getTransitIncomingSegment(index);
+  const outgoingSegment = getTransitOutgoingSegment(index);
+
+  if (incomingSegment) {
+    const incomingCall = props.delayPrediction.calls.find((call) => call.key === `${incomingSegment.id}-arrival`) ?? null;
+
+    if (incomingCall) {
+      related.push(incomingCall);
+    }
+  }
+
+  if (outgoingSegment) {
+    const outgoingCall = props.delayPrediction.calls.find((call) => call.key === `${outgoingSegment.id}-departure`) ?? null;
+
+    if (outgoingCall) {
+      related.push(outgoingCall);
+    }
+  }
+
+  return related;
+};
+
+const getDelayTone = (delayMinutes: number | null): 'good' | 'warn' | 'bad' | 'neutral' => {
+  if (delayMinutes === null) {
+    return 'neutral';
+  }
+
+  if (delayMinutes <= 0) {
+    return 'good';
+  }
+
+  if (delayMinutes <= 5) {
+    return 'warn';
+  }
+
+  return 'bad';
+};
+
+const getDelayBands = (call: ConnectionDelayCall): DelayBand[] => {
+  const definitions = [
+    {
+      key: 'on-time',
+      label: t('views.dashboard.events.connection.delayBandOnTime'),
+      tone: 'good' as const,
+      predicate: (delay: number) => delay <= 0,
+    },
+    {
+      key: 'short',
+      label: t('views.dashboard.events.connection.delayBandShort'),
+      tone: 'warn' as const,
+      predicate: (delay: number) => delay >= 1 && delay <= 2,
+    },
+    {
+      key: 'medium',
+      label: t('views.dashboard.events.connection.delayBandMedium'),
+      tone: 'warn' as const,
+      predicate: (delay: number) => delay >= 3 && delay <= 5,
+    },
+    {
+      key: 'long',
+      label: t('views.dashboard.events.connection.delayBandLong'),
+      tone: 'bad' as const,
+      predicate: (delay: number) => delay >= 6 && delay <= 10,
+    },
+    {
+      key: 'severe',
+      label: t('views.dashboard.events.connection.delayBandSevere'),
+      tone: 'bad' as const,
+      predicate: (delay: number) => delay >= 11,
+    },
+  ];
+
+  return definitions.map((definition) => ({
+    key: definition.key,
+    label: definition.label,
+    tone: definition.tone,
+    probability: call.distribution
+      .filter((bucket) => definition.predicate(bucket.delayMinutes))
+      .reduce((total, bucket) => total + bucket.probability, 0),
+  }));
+};
+
+const shouldShowIncomingLine = (stop: RouteStopEntry): boolean => !(
+  hasStationChange(stop) && stop.incomingSegment?.productType === 'walk'
+);
+
+const shouldShowOutgoingLine = (stop: RouteStopEntry): boolean => !(
+  hasStationChange(stop) && stop.outgoingSegment?.productType === 'walk'
+);
+
+const getStationLink = (stopName: string, stopId?: string | null): string => buildStationInfoUrl(stopName, stopId);
+
+const getStationProvider = (stopName: string, stopId?: string | null): string => (
+  getStationInfoProviderLabel(stopName, stopId)
+);
 </script>
 
 <template>
@@ -240,6 +618,14 @@ const getTransferLabel = (stop: RouteStopEntry): string | null => {
               <span class="connection-route-stop-meta">{{ getStopMeta(stop) }}</span>
             </span>
             <span class="connection-route-stop-side">
+              <span
+                v-if="getStopPredictionLabel(index)"
+                class="connection-route-prediction-button"
+                :class="`connection-route-prediction-button--${getPredictionTone(index)}`"
+                @click.stop="toggleStop(index)"
+              >
+                {{ getStopPredictionLabel(index) }}
+              </span>
               <span v-if="getOffsetLabel(stop)" class="connection-route-offset">{{ getOffsetLabel(stop) }}</span>
               <SvgIcon
                 :icon="isSelectedStop(index) ? 'material/expand_less' : 'material/expand_more'"
@@ -250,6 +636,11 @@ const getTransferLabel = (stop: RouteStopEntry): string | null => {
           </button>
 
           <div v-if="isSelectedStop(index)" class="connection-route-stop-details">
+            <div v-if="getStopAddress(stop)" class="connection-route-address-row">
+              <span class="connection-route-detail-label">{{ t('views.dashboard.events.connection.addressLabel') }}</span>
+              <span class="connection-route-detail-value">{{ getStopAddress(stop) }}</span>
+            </div>
+
             <div class="connection-route-time-grid">
               <div v-if="stop.arrivalTime" class="connection-route-detail-row">
                 <span class="connection-route-detail-label">{{ t('views.dashboard.events.connection.arrivalLabel') }}</span>
@@ -261,7 +652,7 @@ const getTransferLabel = (stop: RouteStopEntry): string | null => {
               </div>
             </div>
 
-            <div v-if="stop.incomingSegment" class="connection-route-lines">
+            <div v-if="stop.incomingSegment && shouldShowIncomingLine(stop)" class="connection-route-lines">
               <span
                 v-if="getConnectionProductEmoji(stop.incomingSegment.productType)"
                 class="connection-route-line-emoji"
@@ -279,7 +670,7 @@ const getTransferLabel = (stop: RouteStopEntry): string | null => {
               <span>{{ t('views.dashboard.events.connection.arrivalLabel') }} {{ stop.incomingSegment.arrivalTime }}</span>
             </div>
 
-            <div v-if="stop.outgoingSegment" class="connection-route-lines">
+            <div v-if="stop.outgoingSegment && shouldShowOutgoingLine(stop)" class="connection-route-lines">
               <span
                 v-if="getConnectionProductEmoji(stop.outgoingSegment.productType)"
                 class="connection-route-line-emoji"
@@ -297,9 +688,112 @@ const getTransferLabel = (stop: RouteStopEntry): string | null => {
               <span>{{ t('views.dashboard.events.connection.directionLabel', { stop: stop.outgoingSegment.toStop }) }}</span>
             </div>
 
-            <p v-if="getTransferLabel(stop)" class="connection-route-transfer">
-              {{ getTransferLabel(stop) }}
-            </p>
+            <div v-if="getTransferLabel(stop)" class="connection-route-transfer-card" :class="`connection-route-transfer-card--${getTransferTone(getTransferAssessment(index)?.successProbability ?? null)}`">
+              <p class="connection-route-transfer">
+                {{ getTransferLabel(stop) }}
+              </p>
+              <p v-if="hasStationChange(stop)" class="connection-route-transfer-summary">
+                {{ t('views.dashboard.events.connection.transferWalkSummary', {
+                  from: stop.incomingSegment?.toStop ?? stop.name,
+                  to: stop.outgoingSegment?.productType === 'walk' ? stop.outgoingSegment.toStop : stop.outgoingSegment?.fromStop ?? stop.name,
+                }) }}
+              </p>
+              <div class="connection-route-transfer-extras">
+                <span v-if="hasStationChange(stop)" class="connection-route-transfer-chip">
+                  🚶 {{ t('views.dashboard.events.connection.transferStationChange') }}
+                </span>
+                <span v-if="getTransferDistanceLabel(stop)" class="connection-route-transfer-chip">
+                  📏 {{ t('views.dashboard.events.connection.transferDistance', { value: getTransferDistanceLabel(stop) }) }}
+                </span>
+                <span
+                  v-if="getTransferFeasibilityLabel(index)"
+                  class="connection-route-transfer-chip"
+                  :class="`connection-route-transfer-chip--${getTransferTone(getTransferAssessment(index)?.successProbability ?? null)}`"
+                >
+                  {{ getTransferFeasibilityLabel(index) }}
+                </span>
+                <span v-if="formatProbability(getTransferAssessment(index)?.missedProbability ?? null)" class="connection-route-transfer-chip">
+                  {{ t('views.dashboard.events.connection.transferMissedShort', { value: formatProbability(getTransferAssessment(index)?.missedProbability ?? null) }) }}
+                </span>
+                <a
+                  v-if="getTransferRouteUrl(stop)"
+                  class="connection-route-station-link"
+                  :href="getTransferRouteUrl(stop) ?? undefined"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  {{ t('views.dashboard.events.connection.debugTransferRouteLink') }}
+                </a>
+                <a
+                  v-if="stop.incomingSegment"
+                  class="connection-route-station-link"
+                  :href="getStationLink(stop.incomingSegment.toStop, stop.incomingSegment.toStopId)"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  {{ t('views.dashboard.events.connection.stationInfoLink', {
+                    stop: stop.incomingSegment.toStop,
+                    provider: getStationProvider(stop.incomingSegment.toStop, stop.incomingSegment.toStopId),
+                  }) }}
+                </a>
+                <a
+                  v-if="stop.outgoingSegment && stop.outgoingSegment.productType === 'walk'"
+                  class="connection-route-station-link"
+                  :href="getStationLink(stop.outgoingSegment.toStop, stop.outgoingSegment.toStopId)"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  {{ t('views.dashboard.events.connection.stationInfoLink', {
+                    stop: stop.outgoingSegment.toStop,
+                    provider: getStationProvider(stop.outgoingSegment.toStop, stop.outgoingSegment.toStopId),
+                  }) }}
+                </a>
+              </div>
+            </div>
+
+            <section v-if="getRelatedDelayCalls(index).length > 0 || getStopPredictionValue(index)" class="connection-route-delay-history">
+              <strong class="connection-route-delay-title">{{ t('views.dashboard.events.connection.delayStopHistoryTitle') }}</strong>
+              <p v-if="delayPrediction?.historyNote" class="connection-route-delay-note">
+                {{ delayPrediction.historyNote }}
+              </p>
+              <div class="connection-route-time-grid">
+                <div
+                  v-if="getStopPredictionValue(index)"
+                  class="connection-route-detail-row"
+                  :class="`connection-route-detail-row--${getPredictionTone(index)}`"
+                >
+                  <span class="connection-route-detail-label">{{ getStopPredictionTitle(index) }}</span>
+                  <span class="connection-route-detail-value">{{ getStopPredictionValue(index) }}</span>
+                </div>
+              </div>
+              <div class="connection-route-delay-calls">
+                <article
+                  v-for="call in getRelatedDelayCalls(index)"
+                  :key="call.key"
+                  class="connection-route-delay-call"
+                  :class="`connection-route-delay-call--${getDelayTone(call.expectedDelayMinutes)}`"
+                >
+                  <strong>{{ call.stopName }} · {{ call.eventType === 'departure' ? t('views.dashboard.events.connection.departureLabel') : t('views.dashboard.events.connection.arrivalLabel') }}</strong>
+                  <span>{{ t('views.dashboard.events.connection.predictedDelayShort', { value: formatDelayMinutes(call.expectedDelayMinutes) ?? t('calendar.connection.timeUnknown') }) }}</span>
+                  <span v-if="formatDelayMinutes(call.p50DelayMinutes)">{{ t('views.dashboard.events.connection.p50DelayShort', { value: formatDelayMinutes(call.p50DelayMinutes) }) }}</span>
+                  <span v-if="formatDelayMinutes(call.p90DelayMinutes)">{{ t('views.dashboard.events.connection.p90DelayShort', { value: formatDelayMinutes(call.p90DelayMinutes) }) }}</span>
+                  <span v-if="formatProbability(call.probabilityLate)">{{ t('views.dashboard.events.connection.probabilityLateShort', { value: formatProbability(call.probabilityLate) }) }}</span>
+                  <div v-if="call.distribution.length > 0" class="connection-route-delay-scale">
+                    <div
+                      v-for="band in getDelayBands(call)"
+                      :key="`${call.key}-${band.key}`"
+                      class="connection-route-delay-band"
+                    >
+                      <span class="connection-route-delay-band-label">{{ band.label }}</span>
+                      <span class="connection-route-delay-band-track">
+                        <span class="connection-route-delay-band-fill" :class="`connection-route-delay-band-fill--${band.tone}`" :style="{ width: `${Math.round(band.probability * 100)}%` }"></span>
+                      </span>
+                      <span class="connection-route-delay-band-value">{{ formatProbability(band.probability) ?? formatProbability(0) }}</span>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </section>
           </div>
         </div>
       </li>
@@ -438,6 +932,8 @@ const getTransferLabel = (stop: RouteStopEntry): string | null => {
   align-items: center;
   gap: 8px;
   color: #6b7280;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .connection-route-stop-name {
@@ -451,20 +947,74 @@ const getTransferLabel = (stop: RouteStopEntry): string | null => {
   color: #6b7280;
 }
 
-.connection-route-offset {
+.connection-route-offset,
+.connection-route-prediction-button {
   display: inline-flex;
   align-items: center;
   padding: 4px 8px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.06);
   font-size: 0.74rem;
   font-weight: 700;
+}
+
+.connection-route-offset {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.connection-route-prediction-button {
+  cursor: pointer;
+}
+
+.connection-route-prediction-button--good {
+  background: rgba(220, 252, 231, 0.92);
+  color: #166534;
+}
+
+.connection-route-prediction-button--warn {
+  background: rgba(254, 243, 199, 0.95);
+  color: #92400e;
+}
+
+.connection-route-prediction-button--bad {
+  background: rgba(254, 226, 226, 0.95);
+  color: #b91c1c;
+}
+
+.connection-route-prediction-button--neutral {
+  background: rgba(226, 232, 240, 0.92);
+  color: #475569;
 }
 
 .connection-route-stop-details {
   display: grid;
   gap: 10px;
   padding: 10px 0 4px;
+}
+
+.connection-route-address-row,
+.connection-route-transfer-card,
+.connection-route-delay-history {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.connection-route-transfer-card {
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+}
+
+.connection-route-transfer-card--good {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.connection-route-transfer-card--warn {
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.connection-route-transfer-card--bad {
+  border-color: rgba(239, 68, 68, 0.4);
 }
 
 .connection-route-time-grid {
@@ -509,11 +1059,147 @@ const getTransferLabel = (stop: RouteStopEntry): string | null => {
   font-size: 1rem;
 }
 
-.connection-route-transfer {
+.connection-route-transfer,
+.connection-route-transfer-summary,
+.connection-route-delay-note {
   margin: 0;
   color: #52525b;
   font-size: 0.84rem;
+}
+
+.connection-route-transfer {
   font-weight: 600;
+}
+
+.connection-route-transfer-extras,
+.connection-route-delay-calls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.connection-route-delay-calls {
+  display: grid;
+}
+
+.connection-route-delay-title {
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.connection-route-delay-call {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  color: #475569;
+  font-size: 0.8rem;
+}
+
+.connection-route-delay-call--good {
+  border: 1px solid rgba(34, 197, 94, 0.22);
+}
+
+.connection-route-delay-call--warn {
+  border: 1px solid rgba(245, 158, 11, 0.22);
+}
+
+.connection-route-delay-call--bad {
+  border: 1px solid rgba(239, 68, 68, 0.22);
+}
+
+.connection-route-delay-call--neutral {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.connection-route-delay-scale {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.connection-route-delay-band {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.connection-route-delay-band-label,
+.connection-route-delay-band-value {
+  font-size: 0.74rem;
+  color: #475569;
+}
+
+.connection-route-delay-band-track {
+  display: block;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.92);
+}
+
+.connection-route-delay-band-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.connection-route-delay-band-fill--good {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.92), rgba(22, 163, 74, 0.92));
+}
+
+.connection-route-delay-band-fill--warn {
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.96), rgba(245, 158, 11, 0.96));
+}
+
+.connection-route-delay-band-fill--bad {
+  background: linear-gradient(90deg, rgba(248, 113, 113, 0.96), rgba(239, 68, 68, 0.96));
+}
+
+.connection-route-transfer-chip,
+.connection-route-station-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.connection-route-transfer-chip {
+  background: rgba(255, 247, 237, 0.96);
+  color: #9a3412;
+}
+
+.connection-route-transfer-chip--good {
+  background: rgba(220, 252, 231, 0.92);
+  color: #166534;
+}
+
+.connection-route-transfer-chip--warn {
+  background: rgba(254, 243, 199, 0.95);
+  color: #92400e;
+}
+
+.connection-route-transfer-chip--bad {
+  background: rgba(254, 226, 226, 0.95);
+  color: #b91c1c;
+}
+
+.connection-route-station-link {
+  color: #7c2d12;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  text-decoration: none;
 }
 
 @media (max-width: 720px) {

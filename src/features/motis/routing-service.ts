@@ -24,11 +24,68 @@ export type ConnectionSegment = {
   productLabel: string;
   lineLabel: string;
   fromStop: string;
+  fromStopId: string | null;
+  fromCoordinates: Coordinates | null;
   toStop: string;
+  toStopId: string | null;
+  toCoordinates: Coordinates | null;
   departureIso: string | null;
   departureTime: string;
   arrivalIso: string | null;
   arrivalTime: string;
+};
+
+export type ConnectionDelayDistributionBucket = {
+  delayMinutes: number;
+  probability: number;
+};
+
+export type ConnectionDelayCall = {
+  key: string;
+  stopName: string;
+  stopId: string | null;
+  serviceLabel: string;
+  eventType: 'departure' | 'arrival';
+  plannedIso: string | null;
+  likelyIso: string | null;
+  expectedDelayMinutes: number | null;
+  mostLikelyDelayMinutes: number | null;
+  p50DelayMinutes: number | null;
+  p90DelayMinutes: number | null;
+  probabilityLate: number | null;
+  distribution: ConnectionDelayDistributionBucket[];
+};
+
+export type ConnectionTransferAssessment = {
+  key: string;
+  fromStopName: string;
+  toStopName: string;
+  incomingSegmentId: string;
+  outgoingSegmentId: string;
+  transferMinutes: number | null;
+  successProbability: number | null;
+  missedProbability: number | null;
+  arrivalExpectedDelayMinutes: number | null;
+  arrivalP50DelayMinutes: number | null;
+  arrivalP90DelayMinutes: number | null;
+  departureExpectedDelayMinutes: number | null;
+  departureP50DelayMinutes: number | null;
+  departureP90DelayMinutes: number | null;
+};
+
+export type ConnectionDelayPrediction = {
+  likelyConnection: ConnectionOption | null;
+  expectedDepartureDelayMinutes: number | null;
+  expectedArrivalDelayMinutes: number | null;
+  p50DepartureDelayMinutes: number | null;
+  p50ArrivalDelayMinutes: number | null;
+  p90DepartureDelayMinutes: number | null;
+  p90ArrivalDelayMinutes: number | null;
+  probabilityArrivalLate: number | null;
+  calls: ConnectionDelayCall[];
+  transferAssessments: ConnectionTransferAssessment[];
+  historyAvailable: boolean;
+  historyNote: string | null;
 };
 
 export type ConnectionOption = {
@@ -43,6 +100,7 @@ export type ConnectionOption = {
   transportModes: string[];
   segments: ConnectionSegment[];
   status: ConnectionStatus;
+  delayPrediction?: ConnectionDelayPrediction | null;
 };
 
 export type ConnectionSummary = ConnectionOption & {
@@ -86,6 +144,11 @@ type MotisLeg = {
   tripShortName?: string;
   displayName?: string;
   headsign?: string;
+  steps?: Array<{
+    distance?: number;
+    relativeDirection?: string;
+    streetName?: string;
+  }>;
 };
 
 type MotisItinerary = {
@@ -453,7 +516,11 @@ const getSegments = (itinerary: MotisItinerary, showTransferWalkNodes: boolean):
         productLabel: getProductLabel(productType),
         lineLabel: getLegLineLabel(leg),
         fromStop: getStopName(leg.from?.name),
+        fromStopId: normalizeStopKey(leg.from),
+        fromCoordinates: getPlaceCoordinates(leg.from),
         toStop: getStopName(leg.to?.name),
+        toStopId: normalizeStopKey(leg.to),
+        toCoordinates: getPlaceCoordinates(leg.to),
         departureIso,
         departureTime: formatTime(departureIso ?? undefined),
         arrivalIso,
@@ -539,6 +606,38 @@ const toConnectionOption = (itinerary: MotisItinerary, showTransferWalkNodes: bo
     transportModes: getTransportModes(itinerary),
     segments,
     status: getStatus(itinerary, firstLeg, lastLeg),
+    delayPrediction: null,
+  };
+};
+
+export const buildConnectionSummaryFromPlanResponse = (
+  payload: unknown,
+  options: FetchConnectionOptions = {},
+): ConnectionSummary | null => {
+  if (!isObject(payload) && !Array.isArray(payload)) {
+    return null;
+  }
+
+  const itineraries = pickItineraries(
+    extractItineraries(payload as MotisPlanResponse),
+    options.latestArrivalIso,
+    options.maxConnections,
+  );
+
+  if (itineraries.length === 0) {
+    return null;
+  }
+
+  const includeTransferWalkNodes = Boolean(options.showTransferWalkNodes);
+  const [primary, ...alternatives] = itineraries.map((itinerary) => toConnectionOption(itinerary, includeTransferWalkNodes));
+
+  if (!primary) {
+    return null;
+  }
+
+  return {
+    ...primary,
+    alternatives,
   };
 };
 
@@ -616,29 +715,5 @@ export const fetchNextConnection = async (
     },
   });
 
-  if (!isObject(payload) && !Array.isArray(payload)) {
-    return null;
-  }
-
-  const itineraries = pickItineraries(
-    extractItineraries(payload as MotisPlanResponse),
-    options.latestArrivalIso,
-    options.maxConnections,
-  );
-
-  if (itineraries.length === 0) {
-    return null;
-  }
-
-  const includeTransferWalkNodes = Boolean(options.showTransferWalkNodes);
-  const [primary, ...alternatives] = itineraries.map((itinerary) => toConnectionOption(itinerary, includeTransferWalkNodes));
-
-  if (!primary) {
-    return null;
-  }
-
-  return {
-    ...primary,
-    alternatives,
-  };
+  return buildConnectionSummaryFromPlanResponse(payload, options);
 };
