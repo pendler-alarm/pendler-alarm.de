@@ -32,7 +32,7 @@ const formatTime = (value: string | null): string => {
   }).format(new Date(value));
 };
 
-const toOriginParam = (origin: Coordinates): string => `${origin.lat},${origin.lon}`;
+const toCoordinatesParam = (coordinates: Coordinates): string => `${coordinates.lat},${coordinates.lon}`;
 
 const normalizePredictionRows = (value: unknown): number[][] => (
   Array.isArray(value)
@@ -253,12 +253,12 @@ const buildTransferAssessments = (
 
 export const fetchDelayPrediction = async (
   origin: Coordinates,
-  destinationStationDhid: string,
+  destination: Coordinates,
   departureIso: string,
 ): Promise<ConnectionDelayPrediction | null> => {
   const body = {
-    origin: toOriginParam(origin),
-    destination_station_dhid: destinationStationDhid,
+    origin: toCoordinatesParam(origin),
+    destination: toCoordinatesParam(destination),
     departure_time: departureIso,
   };
 
