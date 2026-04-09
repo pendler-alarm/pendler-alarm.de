@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import SvgIcon from '@/components/SvgIcon.vue';
 import SharingOptionCard from '@/components/connection/SharingOptionCard.vue';
@@ -36,12 +36,20 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'toggle'): void;
+  (event: 'update-buffer', value: number): void;
 }>();
 
 const { t, locale } = useI18n();
 const expandedAlternatives = ref<Set<string>>(new Set());
 
 const isExpanded = computed(() => props.expanded ?? false);
+const requestedBufferDraft = ref(props.connection.requestedBufferMinutes);
+const lastCommittedBuffer = ref(props.connection.requestedBufferMinutes);
+
+watch(() => props.connection.requestedBufferMinutes, (value) => {
+  requestedBufferDraft.value = value;
+  lastCommittedBuffer.value = value;
+}, { immediate: true });
 
 const primaryLeadLabel = computed(() =>
   getConnectionLeadLabel(props.eventStartIso ?? null, props.connection),
@@ -132,6 +140,46 @@ const routeRiskLabel = computed(() => {
 
   return `${Math.round(riskyTransfer.value.successProbability * 100)} %`;
 });
+
+const showRaisedBufferHint = computed(() =>
+  props.connection.effectiveBufferMinutes > props.connection.requestedBufferMinutes,
+);
+
+const bufferValueLabel = computed(() =>
+  t('views.dashboard.events.connection.bufferValue', { count: requestedBufferDraft.value }),
+);
+
+const syncBufferDraft = (event: Event): void => {
+  const nextValue = Number((event.target as HTMLInputElement).value);
+
+  if (!Number.isFinite(nextValue)) {
+    return;
+  }
+
+  requestedBufferDraft.value = nextValue;
+};
+
+const commitBufferChange = (): void => {
+  const nextValue = requestedBufferDraft.value;
+
+  if (!Number.isFinite(nextValue)) {
+    requestedBufferDraft.value = props.connection.requestedBufferMinutes;
+    return;
+  }
+
+  if (nextValue === lastCommittedBuffer.value) {
+    return;
+  }
+
+  lastCommittedBuffer.value = nextValue;
+  emit('update-buffer', nextValue);
+};
+
+const handleBufferKeyboardCommit = (event: KeyboardEvent): void => {
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
+    commitBufferChange();
+  }
+};
 
 const toggleExpanded = (): void => {
   emit('toggle');
@@ -228,6 +276,44 @@ const toggleExpanded = (): void => {
         <span v-if="primaryLeadLabel" class="connection-fact">
           🗓️ {{ primaryLeadLabel }}
         </span>
+        <span class="connection-fact connection-fact--buffer">
+          🛟 {{ t('views.dashboard.events.connection.buffer', { count: connection.requestedBufferMinutes }) }}
+        </span>
+        <span
+          v-if="showRaisedBufferHint"
+          class="connection-fact connection-fact--buffer connection-fact--buffer-effective"
+        >
+          ⚠️ {{ t('views.dashboard.events.connection.bufferEffective', { count: connection.effectiveBufferMinutes }) }}
+        </span>
+      </div>
+
+      <div class="connection-buffer-control">
+        <div class="connection-buffer-header">
+          <label class="connection-buffer-label" :for="`connection-buffer-${eventId ?? 'default'}`">
+            {{ t('views.dashboard.events.connection.bufferLabel') }}
+          </label>
+          <strong class="connection-buffer-value">{{ bufferValueLabel }}</strong>
+        </div>
+        <div class="connection-buffer-input-wrap">
+          <input
+            :id="`connection-buffer-${eventId ?? 'default'}`"
+            v-model.number="requestedBufferDraft"
+            class="connection-buffer-range"
+            type="range"
+            min="0"
+            max="60"
+            step="1"
+            @input="syncBufferDraft"
+            @mouseup="commitBufferChange"
+            @touchend="commitBufferChange"
+            @keyup="handleBufferKeyboardCommit"
+            @change="commitBufferChange"
+          >
+        </div>
+        <p class="connection-buffer-note">{{ t('views.dashboard.events.connection.bufferHint') }}</p>
+        <p v-if="showRaisedBufferHint" class="connection-buffer-note connection-buffer-note--strong">
+          {{ t('views.dashboard.events.connection.bufferRaised', { count: connection.effectiveBufferMinutes }) }}
+        </p>
       </div>
 
       <div v-if="showRouteToggle" class="connection-route-switch">
@@ -486,6 +572,55 @@ const toggleExpanded = (): void => {
   min-width: 0;
 }
 
+.connection-buffer-control {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(244, 114, 182, 0.18);
+}
+
+.connection-buffer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.connection-buffer-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #7f1d1d;
+}
+
+.connection-buffer-value {
+  font-size: 0.88rem;
+  color: #9f1239;
+}
+
+.connection-buffer-input-wrap {
+  display: grid;
+}
+
+.connection-buffer-range {
+  width: 100%;
+  accent-color: #e11d48;
+  cursor: pointer;
+}
+
+.connection-buffer-note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.connection-buffer-note--strong {
+  color: #9f1239;
+  font-weight: 700;
+}
+
 .connection-ticket-actions {
   display: flex;
   flex-wrap: wrap;
@@ -595,6 +730,15 @@ const toggleExpanded = (): void => {
   background: rgba(255, 255, 255, 0.72);
   color: #374151;
   font-size: 0.85rem;
+}
+
+.connection-fact--buffer {
+  color: #9f1239;
+}
+
+.connection-fact--buffer-effective {
+  color: #92400e;
+  background: rgba(254, 243, 199, 0.96);
 }
 
 .connection-alternatives {

@@ -10,6 +10,7 @@ import ConnectionCard from '@/components/connection/ConnectionCard.vue';
 import SharingOptionCard from '@/components/connection/SharingOptionCard.vue';
 import GoogleAuthCard from '@/features/auth/google/GoogleAuthCard.vue';
 import {
+  DEFAULT_CONNECTION_BUFFER_MINUTES,
   fetchEventConnection,
   fetchUpcomingCalendarEvents,
   type GoogleCalendarEvent,
@@ -40,6 +41,7 @@ type NotificationUiState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupp
 const refreshIntervalMs = 5 * 60_000;
 const REMINDER_LEAD_KEY = 'pendler-alarm.reminder-lead-minutes';
 const SHARING_PREFERENCES_KEY = 'pendler-alarm.sharing-preferences';
+const CONNECTION_BUFFER_KEY = 'pendler-alarm.connection-buffer-minutes-by-event';
 const DEUTSCHLANDTICKET_KEY = 'pendler-alarm.deutschlandticket-enabled';
 const TRANSFER_WALK_NODES_KEY = 'pendler-alarm.transfer-walk-nodes';
 const BAHN_BOOKING_CLASS_KEY = 'pendler-alarm.bahn-booking-class';
@@ -49,6 +51,54 @@ const DEFAULT_BAHN_TRAVELER_PROFILE = '13:23:KLASSE_2:1';
 const DEFAULT_TRANSFER_WALK_NODES = false;
 const DEFAULT_LEAD_MINUTES = 30;
 const defaultSharingPreferences = getDefaultSharingPreferences();
+
+const normalizeConnectionBufferMinutes = (value: number | null | undefined): number => {
+  const normalized = Math.round(value ?? DEFAULT_CONNECTION_BUFFER_MINUTES);
+
+  if (!Number.isFinite(normalized)) {
+    return DEFAULT_CONNECTION_BUFFER_MINUTES;
+  }
+
+  return Math.min(Math.max(normalized, 0), 12 * 60);
+};
+
+const loadStoredConnectionBuffers = (): Record<string, number> => {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  try {
+    const raw = window.localStorage.getItem(CONNECTION_BUFFER_KEY);
+
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw) as Record<string, unknown> | null;
+
+    if (!parsed || typeof parsed !== 'object') {
+      return {};
+    }
+
+    return Object.fromEntries(Object.entries(parsed)
+      .filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+      .map(([eventId, value]) => [eventId, normalizeConnectionBufferMinutes(value as number)]));
+  } catch {
+    return {};
+  }
+};
+
+const storeConnectionBuffers = (buffers: Record<string, number>): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(CONNECTION_BUFFER_KEY, JSON.stringify(buffers));
+  } catch {
+    // Ignore storage errors.
+  }
+};
 
 const loadStoredSharingPreferences = (): SharingPreferences => {
   if (typeof window === 'undefined') {
@@ -144,6 +194,7 @@ const { t, locale } = useI18n();
 const router = useRouter();
 const googleAuthStore = useGoogleAuthStore();
 const initialSharingPreferences = loadStoredSharingPreferences();
+const storedConnectionBuffers = ref<Record<string, number>>(loadStoredConnectionBuffers());
 const events = ref<GoogleCalendarEvent[]>([]);
 const currentLocation = ref<ResolvedLocation | null>(null);
 const currentLocationError = ref('');
@@ -152,6 +203,7 @@ const isStandalone = ref(false);
 const isLoadingEvents = ref(false);
 const eventsError = ref('');
 const loadingConnectionsById = ref<Record<string, boolean>>({});
+const connectionRequestTokens = ref<Record<string, number>>({});
 const expandedConnections = ref<Set<string>>(new Set());
 const apiMetrics = ref(getApiMetrics());
 const lastConnectionRefreshAt = ref<string | null>(null);
@@ -688,6 +740,19 @@ const setConnectionLoading = (eventId: string, isLoading: boolean): void => {
 
 const isConnectionLoading = (eventId: string): boolean => Boolean(loadingConnectionsById.value[eventId]);
 
+const startConnectionRequest = (eventId: string): number => {
+  const nextToken = (connectionRequestTokens.value[eventId] ?? 0) + 1;
+  connectionRequestTokens.value = {
+    ...connectionRequestTokens.value,
+    [eventId]: nextToken,
+  };
+
+  return nextToken;
+};
+
+const isActiveConnectionRequest = (eventId: string, token: number): boolean =>
+  connectionRequestTokens.value[eventId] === token;
+
 const updateEvent = (eventId: string, patch: Partial<GoogleCalendarEvent>): void => {
   events.value = events.value.map((event) => (
     event.id === eventId
@@ -696,8 +761,62 @@ const updateEvent = (eventId: string, patch: Partial<GoogleCalendarEvent>): void
   ));
 };
 
+const getStoredConnectionBufferMinutes = (eventId: string): number =>
+  normalizeConnectionBufferMinutes(storedConnectionBuffers.value[eventId]);
+
+const storeEventConnectionBufferMinutes = (eventId: string, bufferMinutes: number): void => {
+  const normalized = normalizeConnectionBufferMinutes(bufferMinutes);
+  const nextBuffers = { ...storedConnectionBuffers.value };
+
+  if (normalized === DEFAULT_CONNECTION_BUFFER_MINUTES) {
+    delete nextBuffers[eventId];
+  } else {
+    nextBuffers[eventId] = normalized;
+  }
+
+  storedConnectionBuffers.value = nextBuffers;
+  storeConnectionBuffers(nextBuffers);
+};
+
+const applyStoredConnectionBuffer = (event: GoogleCalendarEvent): GoogleCalendarEvent => ({
+  ...event,
+  desiredConnectionBufferMinutes: getStoredConnectionBufferMinutes(event.id),
+});
+
+const updateConnectionBuffer = (eventId: string, nextMinutes: number): void => {
+  const normalized = normalizeConnectionBufferMinutes(nextMinutes);
+  const event = events.value.find((item) => item.id === eventId);
+
+  if (!event || event.desiredConnectionBufferMinutes === normalized) {
+    return;
+  }
+
+  storeEventConnectionBufferMinutes(eventId, normalized);
+  updateEvent(eventId, {
+    desiredConnectionBufferMinutes: normalized,
+  });
+
+  const nextEvent = {
+    ...event,
+    desiredConnectionBufferMinutes: normalized,
+  };
+  const cached = getCachedConnection(eventId, normalized);
+
+  if (cached?.latest) {
+    updateEvent(eventId, {
+      connection: cached.latest.connection,
+      connectionError: null,
+      connectionFetchedAt: cached.latest.fetchedAt,
+    });
+    void refreshSharingSuggestions([nextEvent.id]);
+    return;
+  }
+
+  void refreshConnections([eventId]);
+};
+
 const applyCachedConnection = (event: GoogleCalendarEvent): void => {
-  const cached = getCachedConnection(event.id);
+  const cached = getCachedConnection(event.id, event.desiredConnectionBufferMinutes);
   if (!cached?.latest) {
     return;
   }
@@ -769,21 +888,30 @@ const refreshConnections = async (eventIds?: string[]): Promise<void> => {
       return;
     }
 
-    const { connection, connectionError } = await fetchEventConnection(currentLocation.value, event, { showTransferWalkNodes: showTransferWalkNodes.value });
+    setConnectionLoading(event.id, true);
+    const requestToken = startConnectionRequest(event.id);
 
-    if (sequence !== loadSequence) {
-      return;
-    }
+    try {
+      const { connection, connectionError } = await fetchEventConnection(currentLocation.value, event, { showTransferWalkNodes: showTransferWalkNodes.value });
 
-    const fetchedAt = new Date().toISOString();
-    updateEvent(event.id, {
-      connection,
-      connectionError,
-      connectionFetchedAt: connection ? fetchedAt : event.connectionFetchedAt,
-    });
+      if (sequence !== loadSequence || !isActiveConnectionRequest(event.id, requestToken)) {
+        return;
+      }
 
-    if (connection) {
-      storeConnection(event.id, connection, fetchedAt);
+      const fetchedAt = new Date().toISOString();
+      updateEvent(event.id, {
+        connection,
+        connectionError,
+        connectionFetchedAt: connection ? fetchedAt : event.connectionFetchedAt,
+      });
+
+      if (connection) {
+        storeConnection(event.id, event.desiredConnectionBufferMinutes, connection, fetchedAt);
+      }
+    } finally {
+      if (isActiveConnectionRequest(event.id, requestToken)) {
+        setConnectionLoading(event.id, false);
+      }
     }
   }));
 
@@ -804,9 +932,10 @@ const loadConnections = async (
 
     applyCachedConnection(event);
     setConnectionLoading(event.id, true);
+    const requestToken = startConnectionRequest(event.id);
     const { connection, connectionError } = await fetchEventConnection(origin, event, { showTransferWalkNodes: showTransferWalkNodes.value });
 
-    if (sequence !== loadSequence) {
+    if (sequence !== loadSequence || !isActiveConnectionRequest(event.id, requestToken)) {
       return;
     }
 
@@ -818,7 +947,7 @@ const loadConnections = async (
     });
 
     if (connection) {
-      storeConnection(event.id, connection, fetchedAt);
+      storeConnection(event.id, event.desiredConnectionBufferMinutes, connection, fetchedAt);
     }
 
     setConnectionLoading(event.id, false);
@@ -860,6 +989,7 @@ const resetDashboardState = (): void => {
   currentLocation.value = null;
   currentLocationError.value = '';
   loadingConnectionsById.value = {};
+  connectionRequestTokens.value = {};
   expandedConnections.value = new Set();
   lastConnectionRefreshAt.value = null;
 };
@@ -878,7 +1008,7 @@ const loadEvents = async (): Promise<void> => {
   try {
     const eventsPromise = fetchUpcomingCalendarEvents(googleAuthStore.accessToken);
     const currentLocationPromise = loadCurrentLocation();
-    const nextEvents = await eventsPromise;
+    const nextEvents = (await eventsPromise).map(applyStoredConnectionBuffer);
 
     if (sequence !== loadSequence) {
       return;
@@ -1192,6 +1322,7 @@ watch(showTransferWalkNodes, () => {
             :origin-address="currentLocation?.address ?? null"
             :destination-address="event.locationAddress"
             @toggle="toggleConnection(event.id)"
+            @update-buffer="updateConnectionBuffer(event.id, $event)"
           />
 
           <p v-else-if="event.connectionError" class="event-meta event-meta--muted">
