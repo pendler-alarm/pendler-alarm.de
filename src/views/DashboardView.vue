@@ -18,8 +18,19 @@ import {
 import {
   formatCoordinates,
   getCurrentResolvedLocation,
+  resolveLocation,
+  searchLocationSuggestions,
+  type LocationSuggestion,
   type ResolvedLocation,
 } from '@/features/motis/location-service';
+import { detectTrainLocation, type TrainLocationContext } from '@/features/motis/train-location-service';
+import { trainPresenceState } from '@/features/motis/train-presence-store';
+import {
+  loadStoredOriginPreferences,
+  storeOriginPreferences,
+  type FavoriteLocation,
+  type OriginMode,
+} from '@/lib/location-preferences';
 import {
   findSharingSuggestion,
   getDefaultSharingPreferences,
@@ -50,6 +61,7 @@ const DEFAULT_BAHN_BOOKING_CLASS: BahnBookingClass = '2';
 const DEFAULT_BAHN_TRAVELER_PROFILE = '13:23:KLASSE_2:1';
 const DEFAULT_TRANSFER_WALK_NODES = false;
 const DEFAULT_LEAD_MINUTES = 30;
+const AUTOCOMPLETE_DELAY_MS = 250;
 const defaultSharingPreferences = getDefaultSharingPreferences();
 
 const normalizeConnectionBufferMinutes = (value: number | null | undefined): number => {
@@ -193,11 +205,20 @@ const getReminderLeadTimeMs = (): number => {
 const { t, locale } = useI18n();
 const router = useRouter();
 const googleAuthStore = useGoogleAuthStore();
+const initialOriginPreferences = loadStoredOriginPreferences();
 const initialSharingPreferences = loadStoredSharingPreferences();
 const storedConnectionBuffers = ref<Record<string, number>>(loadStoredConnectionBuffers());
 const events = ref<GoogleCalendarEvent[]>([]);
 const currentLocation = ref<ResolvedLocation | null>(null);
 const currentLocationError = ref('');
+const originMode = ref<OriginMode>(initialOriginPreferences.mode);
+const fixedLocationInput = ref<string>(initialOriginPreferences.fixedLocationInput);
+const favoriteLocations = ref<FavoriteLocation[]>(initialOriginPreferences.favorites);
+const favoriteNameInput = ref('');
+const editingFavoriteId = ref<string | null>(null);
+const fixedLocationSuggestions = ref<LocationSuggestion[]>([]);
+const isLoadingFixedLocationSuggestions = ref(false);
+const trainDetection = ref<TrainLocationContext | null>(null);
 const notificationState = ref<NotificationUiState>('unknown');
 const isStandalone = ref(false);
 const isLoadingEvents = ref(false);
@@ -225,6 +246,7 @@ const bahnBookingClass = ref<BahnBookingClass>(loadStoredBahnBookingClass());
 const bahnTravelerProfileParam = ref<string>(loadStoredBahnTravelerProfile());
 const showTransferWalkNodes = ref<boolean>(loadStoredTransferWalkNodes());
 let loadSequence = 0;
+let fixedLocationAutocompleteTimer: number | null = null;
 let refreshTimer: number | null = null;
 const reminderTimers = new Map<string, number>();
 const sentReminderKeys = new Set<string>();
@@ -282,6 +304,85 @@ const settingsSummaryLabel = computed(() => t('views.dashboard.events.settings.s
   distanceKm: sharingShortTripDistanceKm.value,
   radiusMeters: sharingStationSearchRadiusMeters.value,
 }));
+const favoriteSaveLabel = computed(() => editingFavoriteId.value
+  ? t('views.dashboard.events.currentLocation.updateFavorite')
+  : t('views.dashboard.events.currentLocation.saveFavorite'));
+const currentLocationSourceLabel = computed(() => {
+  if (originMode.value === 'fixed') {
+    return t('views.dashboard.events.currentLocation.sourceFixed');
+  }
+
+  if (trainDetection.value?.icePortalReachable) {
+    return t('views.dashboard.events.currentLocation.sourceTrain');
+  }
+
+  return t('views.dashboard.events.currentLocation.sourceCurrent');
+});
+const trainPortalLabel = computed(() => {
+  if (originMode.value != 'current') {
+    return null;
+  }
+
+  const trainName = [trainDetection.value?.trainType, trainDetection.value?.trainNumber]
+    .filter((part): part is string => Boolean(part))
+    .join(' ');
+
+  if (trainDetection.value?.icePortalReachable) {
+    return trainName
+      ? t('views.dashboard.events.currentLocation.trainReachableNamed', { train: trainName })
+      : t('views.dashboard.events.currentLocation.trainReachable');
+  }
+
+  return t('views.dashboard.events.currentLocation.trainUnavailable');
+});
+const trainSpeedLabel = computed(() => {
+  const speedKmh = trainDetection.value?.speedKmh;
+
+  return speedKmh !== null && speedKmh !== undefined
+    ? t('views.dashboard.events.currentLocation.speedLabel', { value: Math.round(speedKmh) })
+    : null;
+});
+const trainConnectionLabel = computed(() => {
+  const parts = [trainDetection.value?.connectionType, trainDetection.value?.effectiveType]
+    .filter((part): part is string => Boolean(part));
+
+  return parts.length > 0
+    ? t('views.dashboard.events.currentLocation.connectionLabel', { value: parts.join(' / ') })
+    : null;
+});
+const trainFinalStationLabel = computed(() => trainDetection.value?.finalStationName
+  ? t('views.dashboard.events.currentLocation.finalStationLabel', { value: trainDetection.value.finalStationName })
+  : null);
+const browserTrainStatusLabel = computed(() => {
+  if (originMode.value !== 'current') {
+    return null;
+  }
+
+  if (trainDetection.value?.trainIspReachable) {
+    return trainDetection.value.trainIspLikely
+      ? t('views.dashboard.events.currentLocation.trainLikely')
+      : t('views.dashboard.events.currentLocation.trainUnlikely');
+  }
+
+  if (trainPresenceState.status === 'success') {
+    return trainPresenceState.isTrainLikely
+      ? t('views.dashboard.events.currentLocation.trainLikely')
+      : t('views.dashboard.events.currentLocation.trainUnlikely');
+  }
+
+  return t('views.dashboard.events.currentLocation.trainCheckUnavailable');
+});
+const browserTrainIspLabel = computed(() => {
+  if (originMode.value !== 'current') {
+    return null;
+  }
+
+  const provider = trainDetection.value?.trainIspProvider ?? trainPresenceState.isp;
+
+  return provider
+    ? t('views.dashboard.events.currentLocation.trainIspLabel', { value: provider })
+    : null;
+});
 const notificationStatusVariant = computed<'success' | 'warning' | 'error'>(() => {
   if (notificationState.value === 'granted') {
     return 'success';
@@ -524,6 +625,53 @@ const compactLocationLabel = (value: string | null): string | null => {
 
   const uniqueParts = parts.filter((part, index) => parts.indexOf(part) === index);
   return uniqueParts.slice(0, 2).join(', ');
+};
+
+const hasResolvedLocation = (location: ResolvedLocation | null | undefined): boolean =>
+  Boolean(location?.address || location?.coordinates);
+
+const clearFixedLocationAutocomplete = (): void => {
+  if (fixedLocationAutocompleteTimer !== null && typeof window !== 'undefined') {
+    window.clearTimeout(fixedLocationAutocompleteTimer);
+    fixedLocationAutocompleteTimer = null;
+  }
+};
+
+const persistOriginPreferences = (): void => {
+  storeOriginPreferences({
+    mode: originMode.value,
+    fixedLocationInput: fixedLocationInput.value.trim(),
+    favorites: favoriteLocations.value,
+  });
+};
+
+const createFavoriteId = (): string => `favorite-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const resetFavoriteEditor = (): void => {
+  editingFavoriteId.value = null;
+  favoriteNameInput.value = '';
+};
+
+const resolveFixedLocationInput = async (): Promise<ResolvedLocation> => {
+  const normalized = fixedLocationInput.value.trim();
+
+  if (!normalized) {
+    throw new Error(t('views.dashboard.events.currentLocation.applyErrorEmpty'));
+  }
+
+  const matchingFavorite = favoriteLocations.value.find((favorite) => favorite.address === normalized);
+  const resolved = matchingFavorite?.coordinates
+    ? { address: matchingFavorite.address, coordinates: matchingFavorite.coordinates }
+    : await resolveLocation(normalized);
+
+  if (!hasResolvedLocation(resolved)) {
+    throw new Error(t('views.dashboard.events.currentLocation.applyErrorUnresolved'));
+  }
+
+  return {
+    address: resolved.address ?? normalized,
+    coordinates: resolved.coordinates,
+  };
 };
 
 const persistSharingPreferences = (): void => {
@@ -830,6 +978,23 @@ const applyCachedConnection = (event: GoogleCalendarEvent): void => {
 
 const loadCurrentLocation = async (): Promise<ResolvedLocation | null> => {
   try {
+    if (originMode.value === 'fixed') {
+      trainDetection.value = null;
+      const resolvedLocation = await resolveFixedLocationInput();
+      currentLocation.value = resolvedLocation;
+      currentLocationError.value = '';
+      return resolvedLocation;
+    }
+
+    const detectedTrainLocation = await detectTrainLocation();
+    trainDetection.value = detectedTrainLocation;
+
+    if (hasResolvedLocation(detectedTrainLocation.resolvedLocation)) {
+      currentLocation.value = detectedTrainLocation.resolvedLocation;
+      currentLocationError.value = '';
+      return detectedTrainLocation.resolvedLocation;
+    }
+
     const resolvedLocation = await getCurrentResolvedLocation();
     currentLocation.value = resolvedLocation;
     currentLocationError.value = '';
@@ -841,6 +1006,104 @@ const loadCurrentLocation = async (): Promise<ResolvedLocation | null> => {
       : t('calendar.error.locationUnknown');
     return null;
   }
+};
+
+const updateOriginDependentData = async (): Promise<void> => {
+  const origin = await loadCurrentLocation();
+
+  if (!googleAuthStore.isAuthenticated || !origin) {
+    return;
+  }
+
+  await Promise.all([
+    refreshConnections(),
+    refreshSharingSuggestions(),
+  ]);
+};
+
+const applyFixedLocationInput = async (): Promise<void> => {
+  originMode.value = 'fixed';
+  fixedLocationSuggestions.value = [];
+  await updateOriginDependentData();
+};
+
+const applyLocationSuggestion = async (suggestion: LocationSuggestion): Promise<void> => {
+  originMode.value = 'fixed';
+  fixedLocationInput.value = suggestion.address;
+  currentLocation.value = {
+    address: suggestion.address,
+    coordinates: suggestion.coordinates,
+  };
+  currentLocationError.value = '';
+  fixedLocationSuggestions.value = [];
+  await updateOriginDependentData();
+};
+
+const applyFavoriteLocation = async (favorite: FavoriteLocation): Promise<void> => {
+  originMode.value = 'fixed';
+  fixedLocationInput.value = favorite.address;
+  fixedLocationSuggestions.value = [];
+  currentLocation.value = {
+    address: favorite.address,
+    coordinates: favorite.coordinates,
+  };
+  currentLocationError.value = '';
+  await updateOriginDependentData();
+};
+
+const startFavoriteEdit = (favorite: FavoriteLocation): void => {
+  originMode.value = 'fixed';
+  fixedLocationInput.value = favorite.address;
+  favoriteNameInput.value = favorite.name;
+  editingFavoriteId.value = favorite.id;
+  fixedLocationSuggestions.value = [];
+};
+
+const cancelFavoriteEdit = (): void => {
+  resetFavoriteEditor();
+};
+
+const saveFavoriteLocation = async (): Promise<void> => {
+  const name = favoriteNameInput.value.trim();
+
+  if (!name) {
+    currentLocationError.value = t('views.dashboard.events.currentLocation.favoriteNameMissing');
+    return;
+  }
+
+  try {
+    const resolved = await resolveFixedLocationInput();
+    const favorite = {
+      id: editingFavoriteId.value ?? createFavoriteId(),
+      name,
+      address: resolved.address ?? fixedLocationInput.value.trim(),
+      coordinates: resolved.coordinates,
+    } satisfies FavoriteLocation;
+
+    favoriteLocations.value = editingFavoriteId.value
+      ? favoriteLocations.value.map((entry) => (entry.id === editingFavoriteId.value ? favorite : entry))
+      : [favorite, ...favoriteLocations.value.filter((entry) => entry.address !== favorite.address)];
+
+    fixedLocationInput.value = favorite.address;
+    currentLocation.value = resolved;
+    currentLocationError.value = '';
+    persistOriginPreferences();
+    resetFavoriteEditor();
+  } catch (error) {
+    currentLocationError.value = error instanceof Error
+      ? error.message
+      : t('views.dashboard.events.currentLocation.applyErrorUnresolved');
+  }
+};
+
+const removeFavoriteLocation = (favoriteId: string): void => {
+  favoriteLocations.value = favoriteLocations.value.filter((favorite) => favorite.id !== favoriteId);
+
+  if (editingFavoriteId.value === favoriteId) {
+    resetFavoriteEditor();
+  }
+
+  persistOriginPreferences();
 };
 
 const refreshSharingSuggestions = async (eventIds?: string[]): Promise<void> => {
@@ -1080,6 +1343,8 @@ onBeforeUnmount(() => {
     refreshTimer = null;
   }
 
+  clearFixedLocationAutocomplete();
+
   if (typeof window !== 'undefined') {
     window.removeEventListener('focus', syncNotificationState);
   }
@@ -1104,6 +1369,65 @@ watch(
     void loadEvents();
   },
   { immediate: true },
+);
+
+watch(originMode, (nextMode) => {
+  persistOriginPreferences();
+  fixedLocationSuggestions.value = [];
+
+  if (nextMode === 'current') {
+    resetFavoriteEditor();
+    void updateOriginDependentData();
+    return;
+  }
+
+  trainDetection.value = null;
+
+  if (!fixedLocationInput.value.trim()) {
+    currentLocation.value = null;
+    currentLocationError.value = '';
+    return;
+  }
+
+  void updateOriginDependentData();
+});
+
+watch(fixedLocationInput, (value) => {
+  persistOriginPreferences();
+  fixedLocationSuggestions.value = [];
+  clearFixedLocationAutocomplete();
+
+  if (originMode.value !== 'fixed') {
+    isLoadingFixedLocationSuggestions.value = false;
+    return;
+  }
+
+  const query = value.trim();
+
+  if (query.length < 3 || typeof window === 'undefined') {
+    isLoadingFixedLocationSuggestions.value = false;
+    return;
+  }
+
+  isLoadingFixedLocationSuggestions.value = true;
+  fixedLocationAutocompleteTimer = window.setTimeout(async () => {
+    try {
+      fixedLocationSuggestions.value = await searchLocationSuggestions(query);
+    } catch {
+      fixedLocationSuggestions.value = [];
+    } finally {
+      isLoadingFixedLocationSuggestions.value = false;
+      fixedLocationAutocompleteTimer = null;
+    }
+  }, AUTOCOMPLETE_DELAY_MS);
+});
+
+watch(
+  favoriteLocations,
+  () => {
+    persistOriginPreferences();
+  },
+  { deep: true },
 );
 
 watch(
@@ -1177,10 +1501,110 @@ watch(showTransferWalkNodes, () => {
         {{ t('views.dashboard.events.notification.systemHint') }}
       </Message>
 
-      <div v-if="currentLocation?.address || currentLocation?.coordinates" class="current-location">
+      <div class="current-location">
         <strong>{{ t('views.dashboard.events.currentLocation.title') }}</strong>
+
+        <div class="origin-mode-switch">
+          <label class="origin-mode-option">
+            <input v-model="originMode" type="radio" value="current">
+            <span>{{ t('views.dashboard.events.currentLocation.currentOption') }}</span>
+          </label>
+          <label class="origin-mode-option">
+            <input v-model="originMode" type="radio" value="fixed">
+            <span>{{ t('views.dashboard.events.currentLocation.fixedOption') }}</span>
+          </label>
+        </div>
+
+        <div v-if="originMode === 'fixed'" class="origin-fixed-panel">
+          <label class="sharing-field sharing-field--wide">
+            <span>{{ t('views.dashboard.events.currentLocation.fixedInputLabel') }}</span>
+            <input
+              v-model.trim="fixedLocationInput"
+              class="sharing-input"
+              type="search"
+              :placeholder="t('views.dashboard.events.currentLocation.fixedInputPlaceholder')"
+              @keydown.enter.prevent="applyFixedLocationInput"
+            >
+          </label>
+
+          <div class="origin-fixed-actions">
+            <button class="origin-action" type="button" @click="applyFixedLocationInput">
+              {{ t('views.dashboard.events.currentLocation.applyFixed') }}
+            </button>
+          </div>
+
+          <p v-if="isLoadingFixedLocationSuggestions" class="origin-helper-copy">
+            {{ t('views.dashboard.events.currentLocation.autocompleteLoading') }}
+          </p>
+
+          <ul v-else-if="fixedLocationSuggestions.length > 0" class="origin-suggestion-list">
+            <li v-for="suggestion in fixedLocationSuggestions" :key="suggestion.address">
+              <button class="origin-suggestion" type="button" @click="applyLocationSuggestion(suggestion)">
+                {{ suggestion.address }}
+              </button>
+            </li>
+          </ul>
+
+          <label class="sharing-field sharing-field--wide">
+            <span>{{ t('views.dashboard.events.currentLocation.favoriteNameLabel') }}</span>
+            <input
+              v-model.trim="favoriteNameInput"
+              class="sharing-input"
+              type="text"
+              :placeholder="t('views.dashboard.events.currentLocation.favoriteNamePlaceholder')"
+            >
+          </label>
+
+          <div class="origin-fixed-actions">
+            <button class="origin-action" type="button" @click="saveFavoriteLocation">
+              {{ favoriteSaveLabel }}
+            </button>
+            <button
+              v-if="editingFavoriteId"
+              class="origin-action origin-action--secondary"
+              type="button"
+              @click="cancelFavoriteEdit"
+            >
+              {{ t('views.dashboard.events.currentLocation.cancelFavorite') }}
+            </button>
+          </div>
+
+          <div class="favorite-list-block">
+            <strong>{{ t('views.dashboard.events.currentLocation.favoritesTitle') }}</strong>
+            <p v-if="favoriteLocations.length === 0" class="origin-helper-copy">
+              {{ t('views.dashboard.events.currentLocation.noFavorites') }}
+            </p>
+            <ul v-else class="favorite-list">
+              <li v-for="favorite in favoriteLocations" :key="favorite.id" class="favorite-item">
+                <div class="favorite-copy">
+                  <strong>{{ favorite.name }}</strong>
+                  <span>{{ favorite.address }}</span>
+                </div>
+                <div class="favorite-actions">
+                  <button class="origin-chip-action" type="button" @click="applyFavoriteLocation(favorite)">
+                    {{ t('views.dashboard.events.currentLocation.useFavorite') }}
+                  </button>
+                  <button class="origin-chip-action" type="button" @click="startFavoriteEdit(favorite)">
+                    {{ t('views.dashboard.events.currentLocation.editFavorite') }}
+                  </button>
+                  <button class="origin-chip-action origin-chip-action--danger" type="button" @click="removeFavoriteLocation(favorite.id)">
+                    {{ t('views.dashboard.events.currentLocation.deleteFavorite') }}
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <span class="origin-source">{{ t('views.dashboard.events.currentLocation.locationSource', { value: currentLocationSourceLabel }) }}</span>
         <span v-if="currentLocation?.address">🏠 {{ currentLocation.address }}</span>
         <span v-if="currentLocation?.coordinates">🧭 {{ formatCoordinates(currentLocation.coordinates) }}</span>
+        <span v-if="browserTrainStatusLabel">🚦 {{ browserTrainStatusLabel }}</span>
+        <span v-if="browserTrainIspLabel">🌐 {{ browserTrainIspLabel }}</span>
+        <span v-if="trainPortalLabel">🚆 {{ trainPortalLabel }}</span>
+        <span v-if="trainSpeedLabel">{{ trainSpeedLabel }}</span>
+        <span v-if="trainConnectionLabel">{{ trainConnectionLabel }}</span>
+        <span v-if="trainFinalStationLabel">{{ trainFinalStationLabel }}</span>
       </div>
 
       <details class="sharing-settings">
@@ -1658,6 +2082,95 @@ watch(showTransferWalkNodes, () => {
 
 .current-location span {
   color: var(--calendar-state-empty);
+}
+
+.origin-mode-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.origin-mode-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.origin-fixed-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.origin-fixed-actions,
+.favorite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.origin-action,
+.origin-chip-action,
+.origin-suggestion {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  color: #172033;
+  background: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+}
+
+.origin-action--secondary {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.origin-chip-action--danger {
+  color: #9f1239;
+}
+
+.origin-helper-copy {
+  margin: 0;
+  color: var(--calendar-state-empty);
+  font-size: 0.82rem;
+}
+
+.origin-suggestion-list,
+.favorite-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.origin-suggestion {
+  width: 100%;
+  text-align: left;
+}
+
+.favorite-list-block {
+  display: grid;
+  gap: 8px;
+}
+
+.favorite-item {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.favorite-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.favorite-copy span,
+.origin-source {
+  font-size: 0.82rem;
 }
 
 .sharing-settings {
