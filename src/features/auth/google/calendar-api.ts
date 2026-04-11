@@ -68,17 +68,6 @@ const OUTSIDE_CITY_DISTANCE_THRESHOLD_METERS = 10_000;
 const BUFFER_COMPLEX_PRODUCT_TYPES = new Set<ConnectionProductType>(['regio', 'train', 'ice', 'ic', 'flight']);
 const CALENDAR_FETCH_RESULTS = String(Math.max(Number(MAX_EVENT_RESULTS) * 4, Number(MAX_EVENT_RESULTS)));
 
-const normalizeStationDhid = (value: string | null): string | null => {
-  if (!value) {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  const match = trimmed.match(/([a-z]{2}:\d+:\d+)/i);
-
-  return match?.[1]?.toLowerCase() ?? null;
-};
-
 const getEventTimeZone = (start?: { timeZone?: string }): string => start?.timeZone?.trim() || DEFAULT_TIME_ZONE;
 
 const normalizeConnectionBufferMinutes = (value: number | null | undefined): number => {
@@ -339,16 +328,8 @@ export const fetchEventConnection = async (
     }
 
     if (connection) {
-      const destinationSegment = [...connection.segments]
-        .reverse()
-        .find((segment) => segment.productType !== 'walk') ?? null;
-      const destinationStopId = normalizeStationDhid(destinationSegment?.toStopId ?? null);
-      const workflowStationIfopt = destinationSegment
-        ? await resolveWorkflowStationIfopt(destinationSegment.toStop, destinationSegment.toCoordinates)
-        : null;
-      const delayStationId = destinationStopId ?? workflowStationIfopt;
-      const delayPrediction = delayStationId && connection.departureIso
-        ? await fetchDelayPrediction(origin.coordinates, delayStationId, connection.departureIso)
+      const delayPrediction = connection.departureIso
+        ? await fetchDelayPrediction(origin.coordinates, event.locationCoordinates, connection.departureIso)
         : null;
 
       return {
