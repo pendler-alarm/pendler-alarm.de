@@ -1,5 +1,6 @@
 import { reactive, readonly } from 'vue';
 import { getInitialAppVersion, storeAppVersion } from '@/lib/app-version';
+import { sessionStorageStore } from '@/lib/storage';
 
 type ServiceWorkerPhase = 'unsupported' | 'registering' | 'ready' | 'updating' | 'error';
 
@@ -56,17 +57,17 @@ const maybeReloadForWorkerVersion = (version: string | null | undefined): void =
   const normalizedVersion = version?.trim();
 
   if (!normalizedVersion || normalizedVersion === state.appVersion) {
-    window.sessionStorage.removeItem(RELOAD_FLAG_KEY);
+    sessionStorageStore.remove(RELOAD_FLAG_KEY);
     return;
   }
 
-  const lastReloadedVersion = window.sessionStorage.getItem(RELOAD_FLAG_KEY);
+  const lastReloadedVersion = sessionStorageStore.getString(RELOAD_FLAG_KEY);
 
   if (lastReloadedVersion === normalizedVersion) {
     return;
   }
 
-  window.sessionStorage.setItem(RELOAD_FLAG_KEY, normalizedVersion);
+  sessionStorageStore.setString(RELOAD_FLAG_KEY, normalizedVersion);
   window.location.reload();
 };
 

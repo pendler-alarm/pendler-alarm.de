@@ -1,4 +1,5 @@
 import type { Coordinates, ResolvedLocation } from '@/features/motis/location-service';
+import { localStorageStore } from '@/lib/storage';
 
 export type GeoCacheValue = ResolvedLocation & {
   fetchedAt: string;
@@ -43,45 +44,22 @@ const normalizeEntry = (value: unknown): GeoCacheValue | null => {
   };
 };
 
-const loadCache = (): GeoCacheStore => {
-  if (typeof window === 'undefined') {
-    return {};
+const loadCache = (): GeoCacheStore => localStorageStore.getJson(STORAGE_KEY, (value) => {
+  if (!value || typeof value !== 'object') {
+    return null;
   }
 
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return {};
-    }
-
-    const parsed = JSON.parse(raw) as Record<string, unknown> | null;
-
-    if (!parsed || typeof parsed !== 'object') {
-      return {};
-    }
-
-    return Object.fromEntries(
-      Object.entries(parsed)
-        .map(([key, value]) => [key, normalizeEntry(value)] as const)
-        .filter((entry): entry is [string, GeoCacheValue] => entry[1] !== null),
-    );
-  } catch {
-    return {};
-  }
-};
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([key, entry]) => [key, normalizeEntry(entry)] as const)
+      .filter((entry): entry is [string, GeoCacheValue] => entry[1] !== null),
+  );
+}) ?? {};
 
 let cache = loadCache();
 
 const saveCache = (): void => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
-  } catch {
-    // Ignore storage errors.
-  }
+  localStorageStore.setJson(STORAGE_KEY, cache);
 };
 
 const pruneCache = (): void => {

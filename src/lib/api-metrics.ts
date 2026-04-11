@@ -1,4 +1,6 @@
 /* eslint-disable local-i18n/no-hardcoded-text */
+import { localStorageStore } from '@/lib/storage';
+
 export type ApiRequestType = 'motis' | 'googleCalendar' | 'sharing';
 
 export type ApiRequestStatus = 'pending' | 'success' | 'error';
@@ -109,6 +111,7 @@ const sanitizeValue = (value: unknown, depth = 0): unknown => {
 };
 
 const normalizePayload = (payload: Partial<ApiRequestPayload> | null | undefined): ApiRequestPayload | null => {
+  // console.log(payload);
   if (!payload || typeof payload !== 'object') {
     return null;
   }
@@ -226,47 +229,27 @@ const normalizeHistoryEntry = (entry: Partial<ApiRequestHistoryEntry> | null | u
   };
 };
 
-const loadMetrics = (): ApiMetrics => {
-  if (typeof window === 'undefined') {
-    return { ...defaultMetrics };
-  }
+const loadMetrics = (): ApiMetrics => localStorageStore.getJson(STORAGE_KEY, (value) => {
+  const parsed = value as Partial<ApiMetrics> | null;
 
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return { ...defaultMetrics };
-    }
-
-    const parsed = JSON.parse(raw) as Partial<ApiMetrics> | null;
-    return {
-      motis: typeof parsed?.motis === 'number' ? parsed.motis : 0,
-      googleCalendar: typeof parsed?.googleCalendar === 'number' ? parsed.googleCalendar : 0,
-      sharing: typeof parsed?.sharing === 'number' ? parsed.sharing : 0,
-      lastUpdatedIso: typeof parsed?.lastUpdatedIso === 'string' ? parsed.lastUpdatedIso : null,
-      history: Array.isArray(parsed?.history)
-        ? parsed.history
-          .map((entry) => normalizeHistoryEntry(entry))
-          .filter((entry): entry is ApiRequestHistoryEntry => entry !== null)
-          .slice(0, MAX_HISTORY_ENTRIES)
-        : [],
-    };
-  } catch {
-    return { ...defaultMetrics };
-  }
-};
+  return {
+    motis: typeof parsed?.motis === 'number' ? parsed.motis : 0,
+    googleCalendar: typeof parsed?.googleCalendar === 'number' ? parsed.googleCalendar : 0,
+    sharing: typeof parsed?.sharing === 'number' ? parsed.sharing : 0,
+    lastUpdatedIso: typeof parsed?.lastUpdatedIso === 'string' ? parsed.lastUpdatedIso : null,
+    history: Array.isArray(parsed?.history)
+      ? parsed.history
+        .map((entry) => normalizeHistoryEntry(entry))
+        .filter((entry): entry is ApiRequestHistoryEntry => entry !== null)
+        .slice(0, MAX_HISTORY_ENTRIES)
+      : [],
+  };
+}) ?? { ...defaultMetrics };
 
 let metrics: ApiMetrics = loadMetrics();
 
 const saveMetrics = (): void => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(metrics));
-  } catch {
-    // Ignore storage errors.
-  }
+  localStorageStore.setJson(STORAGE_KEY, metrics);
 };
 
 export const getApiMetrics = (): ApiMetrics => ({
@@ -361,15 +344,7 @@ export const annotateApiRequest = (
 
 export const clearApiRequestHistory = (): ApiMetrics => {
   metrics = { ...defaultMetrics };
-
-  if (typeof window !== 'undefined') {
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      saveMetrics();
-      return getApiMetrics();
-    }
-  }
+  localStorageStore.remove(STORAGE_KEY);
 
   return getApiMetrics();
 };

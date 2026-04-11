@@ -1,4 +1,5 @@
 import type { ConnectionSummary } from '@/features/motis/routing-service';
+import { localStorageStore } from '@/lib/storage';
 
 type CachedConnection = {
   connection: ConnectionSummary;
@@ -13,23 +14,9 @@ type ConnectionCacheEntry = {
 const STORAGE_KEY = 'pendler_alarm_connection_cache_v3';
 const MAX_HISTORY = 6;
 
-const loadCache = (): Record<string, ConnectionCacheEntry> => {
-  if (typeof window === 'undefined') {
-    return {};
-  }
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return {};
-    }
-
-    const parsed = JSON.parse(raw) as Record<string, ConnectionCacheEntry> | null;
-    return parsed ?? {};
-  } catch {
-    return {};
-  }
-};
+const loadCache = (): Record<string, ConnectionCacheEntry> => localStorageStore.getJson(STORAGE_KEY, (value) => (
+  value && typeof value === 'object' ? value as Record<string, ConnectionCacheEntry> : null
+)) ?? {};
 
 const createCacheKey = (eventId: string, requestedBufferMinutes: number): string =>
   `${eventId}:${requestedBufferMinutes}`;
@@ -37,15 +24,7 @@ const createCacheKey = (eventId: string, requestedBufferMinutes: number): string
 let cache: Record<string, ConnectionCacheEntry> = loadCache();
 
 const saveCache = (): void => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
-  } catch {
-    // Ignore storage errors.
-  }
+  localStorageStore.setJson(STORAGE_KEY, cache);
 };
 
 export const getCachedConnection = (eventId: string, requestedBufferMinutes: number): ConnectionCacheEntry | null =>

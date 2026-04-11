@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import { translate } from '@/i18n';
+import { sessionStorageStore } from '@/lib/storage';
 import { GOOGLE_CALENDAR_SCOPE, GOOGLE_IDENTITY_SCRIPT_SRC } from '@/utils/constants/api';
 
 type GoogleAuthStatus = 'idle' | 'loading' | 'authenticated' | 'error';
@@ -57,32 +58,27 @@ const readPersistedSession = (): PersistedSession | null => {
     return null;
   }
 
-  const rawValue = window.sessionStorage.getItem(STORAGE_KEY);
+  const parsed = sessionStorageStore.getJson(STORAGE_KEY, (value) => (
+    value && typeof value === 'object' ? value as Partial<PersistedSession> : null
+  ));
 
-  if (!rawValue) {
+  if (!parsed) {
     return null;
   }
 
-  try {
-    const parsed = JSON.parse(rawValue) as Partial<PersistedSession>;
-
-    if (typeof parsed.accessToken !== 'string' || typeof parsed.expiresAt !== 'number') {
-      return null;
-    }
-
-    if (parsed.expiresAt <= Date.now()) {
-      window.sessionStorage.removeItem(STORAGE_KEY);
-      return null;
-    }
-
-    return {
-      accessToken: parsed.accessToken,
-      expiresAt: parsed.expiresAt,
-    };
-  } catch {
-    window.sessionStorage.removeItem(STORAGE_KEY);
+  if (typeof parsed.accessToken !== 'string' || typeof parsed.expiresAt !== 'number') {
     return null;
   }
+
+  if (parsed.expiresAt <= Date.now()) {
+    sessionStorageStore.remove(STORAGE_KEY);
+    return null;
+  }
+
+  return {
+    accessToken: parsed.accessToken,
+    expiresAt: parsed.expiresAt,
+  };
 };
 
 const persistSession = (session: PersistedSession | null): void => {
@@ -91,11 +87,11 @@ const persistSession = (session: PersistedSession | null): void => {
   }
 
   if (!session) {
-    window.sessionStorage.removeItem(STORAGE_KEY);
+    sessionStorageStore.remove(STORAGE_KEY);
     return;
   }
 
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  sessionStorageStore.setJson(STORAGE_KEY, session);
 };
 
 const loadGoogleIdentityScript = async (): Promise<void> => {

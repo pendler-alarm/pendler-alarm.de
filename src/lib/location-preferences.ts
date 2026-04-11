@@ -1,4 +1,5 @@
 import type { Coordinates } from '@/features/motis/location-service';
+import { localStorageStore } from '@/lib/storage';
 
 export type OriginMode = 'current' | 'fixed';
 
@@ -65,42 +66,20 @@ const normalizeFavorite = (value: unknown): FavoriteLocation | null => {
   };
 };
 
-export const loadStoredOriginPreferences = (): StoredOriginPreferences => {
-  if (typeof window === 'undefined') {
-    return defaultPreferences;
-  }
+export const loadStoredOriginPreferences = (): StoredOriginPreferences => localStorageStore.getJson(STORAGE_KEY, (value) => {
+  const parsed = value as Partial<StoredOriginPreferences> | null;
 
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-
-    if (!raw) {
-      return defaultPreferences;
-    }
-
-    const parsed = JSON.parse(raw) as Partial<StoredOriginPreferences> | null;
-
-    return {
-      mode: parsed?.mode === 'fixed' ? 'fixed' : 'current',
-      fixedLocationInput: parsed?.fixedLocationInput?.trim() ?? '',
-      favorites: Array.isArray(parsed?.favorites)
-        ? parsed.favorites
-          .map((favorite) => normalizeFavorite(favorite))
-          .filter((favorite): favorite is FavoriteLocation => favorite !== null)
-        : [],
-    };
-  } catch {
-    return defaultPreferences;
-  }
-};
+  return {
+    mode: parsed?.mode === 'fixed' ? 'fixed' : 'current',
+    fixedLocationInput: parsed?.fixedLocationInput?.trim() ?? '',
+    favorites: Array.isArray(parsed?.favorites)
+      ? parsed.favorites
+        .map((favorite) => normalizeFavorite(favorite))
+        .filter((favorite): favorite is FavoriteLocation => favorite !== null)
+      : [],
+  };
+}) ?? defaultPreferences;
 
 export const storeOriginPreferences = (preferences: StoredOriginPreferences): void => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
-  } catch {
-    // Ignore storage errors.
-  }
+  localStorageStore.setJson(STORAGE_KEY, preferences);
 };

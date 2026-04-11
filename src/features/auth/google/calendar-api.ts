@@ -2,7 +2,6 @@
 import { getLocale, translate } from '@/i18n';
 import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
 import { fetchDelayPrediction } from '@/features/motis/delay-service';
-import { resolveWorkflowStationIfopt } from '@/features/motis/station-registry-service';
 import {
   fetchNextConnection,
   getConnectionDistanceMeters,

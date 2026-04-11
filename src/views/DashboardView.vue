@@ -45,6 +45,7 @@ import {
   type ApiRequestType,
 } from '@/lib/api-metrics';
 import { getCachedConnection, storeConnection } from '@/lib/connection-cache';
+import { localStorageStore } from '@/lib/storage';
 import { useGoogleAuthStore } from '@/features/auth/google/store';
 
 type NotificationUiState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupported';
@@ -74,131 +75,58 @@ const normalizeConnectionBufferMinutes = (value: number | null | undefined): num
   return Math.min(Math.max(normalized, 0), 12 * 60);
 };
 
-const loadStoredConnectionBuffers = (): Record<string, number> => {
-  if (typeof window === 'undefined') {
-    return {};
+const loadStoredConnectionBuffers = (): Record<string, number> => localStorageStore.getJson(CONNECTION_BUFFER_KEY, (value) => {
+  if (!value || typeof value !== 'object') {
+    return null;
   }
 
-  try {
-    const raw = window.localStorage.getItem(CONNECTION_BUFFER_KEY);
-
-    if (!raw) {
-      return {};
-    }
-
-    const parsed = JSON.parse(raw) as Record<string, unknown> | null;
-
-    if (!parsed || typeof parsed !== 'object') {
-      return {};
-    }
-
-    return Object.fromEntries(Object.entries(parsed)
-      .filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
-      .map(([eventId, value]) => [eventId, normalizeConnectionBufferMinutes(value as number)]));
-  } catch {
-    return {};
-  }
-};
+  return Object.fromEntries(Object.entries(value)
+    .filter(([, entry]) => typeof entry === 'number' && Number.isFinite(entry))
+    .map(([eventId, entry]) => [eventId, normalizeConnectionBufferMinutes(entry)]));
+}) ?? {};
 
 const storeConnectionBuffers = (buffers: Record<string, number>): void => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(CONNECTION_BUFFER_KEY, JSON.stringify(buffers));
-  } catch {
-    // Ignore storage errors.
-  }
+  localStorageStore.setJson(CONNECTION_BUFFER_KEY, buffers);
 };
 
-const loadStoredSharingPreferences = (): SharingPreferences => {
-  if (typeof window === 'undefined') {
-    return defaultSharingPreferences;
+const loadStoredSharingPreferences = (): SharingPreferences => localStorageStore.getJson(SHARING_PREFERENCES_KEY, (value) => {
+  if (!value || typeof value !== 'object') {
+    return null;
   }
 
-  try {
-    const raw = window.localStorage.getItem(SHARING_PREFERENCES_KEY);
-    if (!raw) {
-      return defaultSharingPreferences;
-    }
+  const parsed = value as Partial<SharingPreferences>;
 
-    const parsed = JSON.parse(raw) as Partial<SharingPreferences> | null;
-    if (!parsed || typeof parsed !== 'object') {
-      return defaultSharingPreferences;
-    }
+  return {
+    providerId: (parsed.providerId as SharingProviderId | undefined) ?? defaultSharingPreferences.providerId,
+    shortTripDistanceKm: typeof parsed.shortTripDistanceKm === 'number'
+      ? parsed.shortTripDistanceKm
+      : defaultSharingPreferences.shortTripDistanceKm,
+    stationSearchRadiusMeters: typeof parsed.stationSearchRadiusMeters === 'number'
+      ? parsed.stationSearchRadiusMeters
+      : defaultSharingPreferences.stationSearchRadiusMeters,
+    customProviderLabel: parsed.customProviderLabel?.trim() || defaultSharingPreferences.customProviderLabel,
+    customGbfsUrl: parsed.customGbfsUrl?.trim() || defaultSharingPreferences.customGbfsUrl,
+  };
+}) ?? defaultSharingPreferences;
 
-    return {
-      providerId: (parsed.providerId as SharingProviderId | undefined) ?? defaultSharingPreferences.providerId,
-      shortTripDistanceKm: typeof parsed.shortTripDistanceKm === 'number'
-        ? parsed.shortTripDistanceKm
-        : defaultSharingPreferences.shortTripDistanceKm,
-      stationSearchRadiusMeters: typeof parsed.stationSearchRadiusMeters === 'number'
-        ? parsed.stationSearchRadiusMeters
-        : defaultSharingPreferences.stationSearchRadiusMeters,
-      customProviderLabel: parsed.customProviderLabel?.trim() || defaultSharingPreferences.customProviderLabel,
-      customGbfsUrl: parsed.customGbfsUrl?.trim() || defaultSharingPreferences.customGbfsUrl,
-    };
-  } catch {
-    return defaultSharingPreferences;
-  }
-};
+const loadStoredDeutschlandticket = (): boolean =>
+  localStorageStore.getBoolean(DEUTSCHLANDTICKET_KEY) ?? true;
 
-const loadStoredDeutschlandticket = (): boolean => {
-  if (typeof window === 'undefined') {
-    return true;
-  }
-
-  const raw = window.localStorage.getItem(DEUTSCHLANDTICKET_KEY);
-
-  if (raw === null) {
-    return true;
-  }
-
-  return raw !== 'false';
-};
-
-
-const loadStoredBahnBookingClass = (): BahnBookingClass => {
-  if (typeof window === 'undefined') {
-    return DEFAULT_BAHN_BOOKING_CLASS;
-  }
-
-  return window.localStorage.getItem(BAHN_BOOKING_CLASS_KEY) === '1' ? '1' : DEFAULT_BAHN_BOOKING_CLASS;
-};
+const loadStoredBahnBookingClass = (): BahnBookingClass =>
+  localStorageStore.getString(BAHN_BOOKING_CLASS_KEY) === '1' ? '1' : DEFAULT_BAHN_BOOKING_CLASS;
 
 const loadStoredBahnTravelerProfile = (): string => {
-  if (typeof window === 'undefined') {
-    return DEFAULT_BAHN_TRAVELER_PROFILE;
-  }
-
-  const raw = window.localStorage.getItem(BAHN_TRAVELER_PROFILE_KEY)?.trim();
+  const raw = localStorageStore.getString(BAHN_TRAVELER_PROFILE_KEY)?.trim();
 
   return raw || DEFAULT_BAHN_TRAVELER_PROFILE;
 };
 
-
-const loadStoredTransferWalkNodes = (): boolean => {
-  if (typeof window === 'undefined') {
-    return DEFAULT_TRANSFER_WALK_NODES;
-  }
-
-  const raw = window.localStorage.getItem(TRANSFER_WALK_NODES_KEY);
-
-  if (raw === null) {
-    return DEFAULT_TRANSFER_WALK_NODES;
-  }
-
-  return raw === 'true';
-};
+const loadStoredTransferWalkNodes = (): boolean =>
+  localStorageStore.getBoolean(TRANSFER_WALK_NODES_KEY) ?? DEFAULT_TRANSFER_WALK_NODES;
 
 const getReminderLeadTimeMs = (): number => {
-  if (typeof window === 'undefined') {
-    return DEFAULT_LEAD_MINUTES * 60_000;
-  }
-  const raw = window.localStorage.getItem(REMINDER_LEAD_KEY);
-  const minutes = Number(raw);
-  const normalized = Number.isFinite(minutes) && minutes > 0 ? minutes : DEFAULT_LEAD_MINUTES;
+  const minutes = localStorageStore.getNumber(REMINDER_LEAD_KEY) ?? DEFAULT_LEAD_MINUTES;
+  const normalized = minutes > 0 ? minutes : DEFAULT_LEAD_MINUTES;
   return normalized * 60_000;
 };
 
@@ -675,46 +603,26 @@ const resolveFixedLocationInput = async (): Promise<ResolvedLocation> => {
 };
 
 const persistSharingPreferences = (): void => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(SHARING_PREFERENCES_KEY, JSON.stringify(sharingPreferences.value));
+  localStorageStore.setJson(SHARING_PREFERENCES_KEY, sharingPreferences.value);
 };
 
 const persistDeutschlandticketPreference = (): void => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(DEUTSCHLANDTICKET_KEY, String(deutschlandticketEnabled.value));
+  localStorageStore.setBoolean(DEUTSCHLANDTICKET_KEY, deutschlandticketEnabled.value);
 };
 
 const persistBahnBookingClass = (): void => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(BAHN_BOOKING_CLASS_KEY, bahnBookingClass.value);
+  localStorageStore.setString(BAHN_BOOKING_CLASS_KEY, bahnBookingClass.value);
 };
 
 const persistBahnTravelerProfile = (): void => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(
+  localStorageStore.setString(
     BAHN_TRAVELER_PROFILE_KEY,
     bahnTravelerProfileParam.value.trim() || DEFAULT_BAHN_TRAVELER_PROFILE,
   );
 };
 
 const persistTransferWalkNodes = (): void => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(TRANSFER_WALK_NODES_KEY, String(showTransferWalkNodes.value));
+  localStorageStore.setBoolean(TRANSFER_WALK_NODES_KEY, showTransferWalkNodes.value);
 };
 
 const clearReminderTimers = (): void => {

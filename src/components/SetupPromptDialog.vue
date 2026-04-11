@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { localStorageStore } from '@/lib/storage';
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -158,8 +159,8 @@ onMounted(async () => {
   updateStandalone();
   detectInstallHelpMode();
   if (typeof window !== 'undefined') {
-    hasVisitedBefore.value = window.localStorage.getItem(SETUP_VISIT_KEY) === 'true';
-    window.localStorage.setItem(SETUP_VISIT_KEY, 'true');
+    hasVisitedBefore.value = localStorageStore.getBoolean(SETUP_VISIT_KEY) ?? false;
+    localStorageStore.setBoolean(SETUP_VISIT_KEY, true);
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener);
     window.addEventListener('appinstalled', onInstalled);
   }
