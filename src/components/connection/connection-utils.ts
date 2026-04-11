@@ -161,6 +161,8 @@ export const getConnectionProductIcon = (type: ConnectionProductType): string | 
       return 'products/TRAM';
     case 'train':
       return 'products/BAHN';
+    case 'flight':
+      return 'material/flight';
     case 'ice':
       return 'products/ICE';
     case 'ic':
@@ -184,6 +186,8 @@ export const getConnectionProductFallbackLabel = (type: ConnectionProductType): 
       return 'Tram';
     case 'ferry':
       return 'Fähre';
+    case 'flight':
+      return 'Flug';
     case 'ice':
       return 'ICE';
     case 'ic':

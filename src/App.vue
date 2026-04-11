@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink, RouterView } from 'vue-router';
 import SetupPromptDialog from '@/components/SetupPromptDialog.vue';
@@ -7,6 +7,11 @@ import { setLocale, type AppLocale } from '@/i18n';
 import { getInitialAppVersion } from '@/lib/app-version';
 import { fetchReleaseMeta, getDefaultReleaseMeta } from '@/lib/release-meta';
 import { serviceWorkerState, syncServiceWorkerVersion } from '@/lib/service-worker';
+import {
+  startTrainPresencePolling,
+  stopTrainPresencePolling,
+  trainPresenceState,
+} from '@/features/motis/train-presence-store';
 
 const { t, locale } = useI18n();
 const version = ref(getInitialAppVersion());
@@ -29,16 +34,50 @@ const connectionMessage = computed(() => (
 ));
 
 const activeWorkerVersion = computed(() => serviceWorkerState.workerVersion ?? version.value);
+const trainPresenceMessage = computed(() => {
+  if (trainPresenceState.status === 'loading' || trainPresenceState.status === 'idle') {
+    return t('app.trainPresence.loading');
+  }
+
+  if (trainPresenceState.status === 'success') {
+    return trainPresenceState.isTrainLikely
+      ? t('app.trainPresence.likely')
+      : t('app.trainPresence.unlikely');
+  }
+
+  return t('app.trainPresence.unavailable');
+});
+
+const trainPresenceClassName = computed(() => {
+  if (trainPresenceState.status === 'success') {
+    return trainPresenceState.isTrainLikely
+      ? 'train-presence-pill--likely'
+      : 'train-presence-pill--unlikely';
+  }
+
+  return 'train-presence-pill--unknown';
+});
+
+const trainPresenceProvider = computed(() => trainPresenceState.isp
+  ? t('app.trainPresence.provider', { value: trainPresenceState.isp })
+  : null);
 const switchLocale = (nextLocale: AppLocale): void => { setLocale(nextLocale); };
 
 onMounted(async () => {
+  startTrainPresencePolling(5 * 60_000);
+
   try {
     const meta = await fetchReleaseMeta();
     version.value = meta.appVersion;
   } catch {
     version.value = getDefaultReleaseMeta().appVersion;
   }
+
   await syncServiceWorkerVersion(version.value);
+});
+
+onBeforeUnmount(() => {
+  stopTrainPresencePolling();
 });
 </script>
 
@@ -49,6 +88,8 @@ onMounted(async () => {
         {{ serviceWorkerMessage }}
         <span class="service-worker-banner__dot" :class="serviceWorkerState.isOnline ? 'is-online' : 'is-offline'" />
         {{ connectionMessage }}
+        <span class="train-presence-pill" :class="trainPresenceClassName">{{ trainPresenceMessage }}</span>
+        <span v-if="trainPresenceProvider" class="service-worker-banner__version">{{ trainPresenceProvider }}</span>
         <span class="service-worker-banner__version">{{ t('app.footer.version') }} {{ activeWorkerVersion }}</span>
       </p>
     </div>
@@ -92,6 +133,10 @@ onMounted(async () => {
 .service-worker-banner__dot.is-online { background: #22c55e; }
 .service-worker-banner__dot.is-offline { background: #f97316; }
 .service-worker-banner__version { color: rgba(224,242,254,0.8); }
+.train-presence-pill { padding: 4px 10px; border-radius: 999px; font-size: 0.82rem; line-height: 1.1; }
+.train-presence-pill--likely { background: rgba(34, 197, 94, 0.2); color: #dcfce7; }
+.train-presence-pill--unlikely { background: rgba(148, 163, 184, 0.2); color: #e2e8f0; }
+.train-presence-pill--unknown { background: rgba(249, 115, 22, 0.2); color: #ffedd5; }
 .footer-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 20px 24px; }
 .release-link { color: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 0.18em; }
 .locale-switcher { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

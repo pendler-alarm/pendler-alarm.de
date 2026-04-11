@@ -15,6 +15,7 @@ export type ConnectionProductType =
   | 'train'
   | 'ice'
   | 'ic'
+  | 'flight'
   | 'ferry'
   | 'walk';
 
@@ -105,6 +106,9 @@ export type ConnectionOption = {
 
 export type ConnectionSummary = ConnectionOption & {
   alternatives: ConnectionOption[];
+  requestedBufferMinutes: number;
+  effectiveBufferMinutes: number;
+  minimumBufferMinutes: number;
 };
 
 type FetchConnectionOptions = {
@@ -180,6 +184,7 @@ const ubahnPattern = /\bu\s?\d{1,2}\b/i;
 const regioPattern = /\b(re|rb|ire|mrx|merz|ag|erx)\b/i;
 const icePattern = /\bice\b/i;
 const icPattern = /\b(ic|ec)\b/i;
+const flightPattern = /\b(flug|flight|lh\d+|ew\d+|ux\d+|az\d+)\b/i;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
@@ -351,6 +356,17 @@ const getDistanceMeters = (from: Coordinates, to: Coordinates): number => {
   return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 };
 
+export const getConnectionDistanceMeters = (
+  from: Coordinates | null | undefined,
+  to: Coordinates | null | undefined,
+): number | null => {
+  if (!from || !to) {
+    return null;
+  }
+
+  return getDistanceMeters(from, to);
+};
+
 const isTransitLeg = (leg?: MotisLeg | null): boolean => {
   const mode = leg?.mode?.toUpperCase().trim() ?? '';
 
@@ -419,6 +435,10 @@ const shouldIncludeSegment = (legs: MotisLeg[], index: number, leg: MotisLeg, sh
 const getProductType = (leg: MotisLeg): ConnectionProductType => {
   const mode = leg.mode?.toUpperCase().trim() ?? '';
   const label = getLegLineLabel(leg);
+
+  if (mode === 'AIRPLANE' || mode === 'AIR' || mode === 'FLIGHT' || flightPattern.test(label)) {
+    return 'flight';
+  }
 
   if (mode === 'SUBWAY' || mode === 'METRO' || ubahnPattern.test(label)) {
     return 'ubahn';
@@ -493,6 +513,8 @@ const getProductLabel = (type: ConnectionProductType): string => {
       return 'IC';
     case 'train':
       return 'Bahn';
+    case 'flight':
+      return 'Flug';
     case 'walk':
       return 'Fußweg';
     default:
@@ -638,6 +660,9 @@ export const buildConnectionSummaryFromPlanResponse = (
   return {
     ...primary,
     alternatives,
+    requestedBufferMinutes: 0,
+    effectiveBufferMinutes: 0,
+    minimumBufferMinutes: 0,
   };
 };
 

@@ -2,7 +2,13 @@
 import { getLocale, translate } from '@/i18n';
 import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
 import { fetchDelayPrediction } from '@/features/motis/delay-service';
-import { fetchNextConnection, type ConnectionSummary } from '@/features/motis/routing-service';
+import { resolveWorkflowStationIfopt } from '@/features/motis/station-registry-service';
+import {
+  fetchNextConnection,
+  getConnectionDistanceMeters,
+  type ConnectionProductType,
+  type ConnectionSummary,
+} from '@/features/motis/routing-service';
 import {
   formatCoordinates,
   resolveLocation,
@@ -23,6 +29,7 @@ export type GoogleCalendarEvent = {
   locationAddress: string | null;
   locationCoordinates: Coordinates | null;
   coordinatesLabel: string | null;
+  desiredConnectionBufferMinutes: number;
   connection: ConnectionSummary | null;
   connectionError: string | null;
   connectionFetchedAt: string | null;
@@ -55,9 +62,58 @@ type EnrichedLocation = {
 const DEFAULT_TIME_ZONE = 'Europe/Berlin';
 const MAX_CONNECTION_OPTIONS = 3;
 const CONNECTION_SEARCH_WINDOW_MINUTES = 120;
+export const DEFAULT_CONNECTION_BUFFER_MINUTES = 10;
+const MIN_COMPLEX_CONNECTION_BUFFER_MINUTES = 30;
+const OUTSIDE_CITY_DISTANCE_THRESHOLD_METERS = 10_000;
+const BUFFER_COMPLEX_PRODUCT_TYPES = new Set<ConnectionProductType>(['regio', 'train', 'ice', 'ic', 'flight']);
 const CALENDAR_FETCH_RESULTS = String(Math.max(Number(MAX_EVENT_RESULTS) * 4, Number(MAX_EVENT_RESULTS)));
 
 const getEventTimeZone = (start?: { timeZone?: string }): string => start?.timeZone?.trim() || DEFAULT_TIME_ZONE;
+
+const normalizeConnectionBufferMinutes = (value: number | null | undefined): number => {
+  const normalized = Math.round(value ?? DEFAULT_CONNECTION_BUFFER_MINUTES);
+
+  if (!Number.isFinite(normalized)) {
+    return DEFAULT_CONNECTION_BUFFER_MINUTES;
+  }
+
+  return Math.min(Math.max(normalized, 0), 12 * 60);
+};
+
+const shiftIsoByMinutes = (value: string, minutes: number): string => {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  date.setMinutes(date.getMinutes() + minutes);
+  return date.toISOString();
+};
+
+const getLatestArrivalIso = (event: GoogleCalendarEvent, bufferMinutes: number): string =>
+  shiftIsoByMinutes(toTimeZoneIsoString(event.startIso ?? '', event.timeZone), -bufferMinutes);
+
+const getDistanceBasedMinimumBufferMinutes = (
+  origin: Coordinates,
+  destination: Coordinates,
+): number => {
+  const distanceMeters = getConnectionDistanceMeters(origin, destination);
+
+  return distanceMeters !== null && distanceMeters >= OUTSIDE_CITY_DISTANCE_THRESHOLD_METERS
+    ? MIN_COMPLEX_CONNECTION_BUFFER_MINUTES
+    : DEFAULT_CONNECTION_BUFFER_MINUTES;
+};
+
+const getRouteBasedMinimumBufferMinutes = (connection: ConnectionSummary | null): number => {
+  if (!connection) {
+    return DEFAULT_CONNECTION_BUFFER_MINUTES;
+  }
+
+  return connection.segments.some((segment) => BUFFER_COMPLEX_PRODUCT_TYPES.has(segment.productType))
+    ? MIN_COMPLEX_CONNECTION_BUFFER_MINUTES
+    : DEFAULT_CONNECTION_BUFFER_MINUTES;
+};
 
 const getTimeZoneOffset = (date: Date, timeZone: string): string => {
   const offsetValue = new Intl.DateTimeFormat('en-US', {
@@ -181,6 +237,7 @@ const createBaseEvent = async (
     locationAddress: location.address,
     locationCoordinates: location.coordinates,
     coordinatesLabel: location.coordinatesLabel,
+    desiredConnectionBufferMinutes: DEFAULT_CONNECTION_BUFFER_MINUTES,
     connection: null,
     connectionError: null,
     connectionFetchedAt: null,
@@ -237,16 +294,38 @@ export const fetchEventConnection = async (
     };
   }
 
+  const originCoordinates = origin.coordinates;
+  const destinationCoordinates = event.locationCoordinates;
+
   try {
-    const latestArrivalIso = toTimeZoneIsoString(event.startIso, event.timeZone);
-    const connection = await fetchNextConnection(origin.coordinates, event.locationCoordinates, {
-      time: latestArrivalIso,
-      latestArrivalIso,
-      arriveBy: true,
-      maxConnections: MAX_CONNECTION_OPTIONS,
-      searchWindowMinutes: CONNECTION_SEARCH_WINDOW_MINUTES,
-      showTransferWalkNodes: options.showTransferWalkNodes,
-    });
+    const requestedBufferMinutes = normalizeConnectionBufferMinutes(event.desiredConnectionBufferMinutes);
+    const distanceBasedMinimumBufferMinutes = getDistanceBasedMinimumBufferMinutes(
+      originCoordinates,
+      destinationCoordinates,
+    );
+    let effectiveBufferMinutes = Math.max(requestedBufferMinutes, distanceBasedMinimumBufferMinutes);
+
+    const loadConnectionForBuffer = async (bufferMinutes: number): Promise<ConnectionSummary | null> => {
+      const latestArrivalIso = getLatestArrivalIso(event, bufferMinutes);
+
+      return fetchNextConnection(originCoordinates, destinationCoordinates, {
+        time: latestArrivalIso,
+        latestArrivalIso,
+        arriveBy: true,
+        maxConnections: MAX_CONNECTION_OPTIONS,
+        searchWindowMinutes: CONNECTION_SEARCH_WINDOW_MINUTES,
+        showTransferWalkNodes: options.showTransferWalkNodes,
+      });
+    };
+
+    let connection = await loadConnectionForBuffer(effectiveBufferMinutes);
+    const routeBasedMinimumBufferMinutes = getRouteBasedMinimumBufferMinutes(connection);
+    const minimumBufferMinutes = Math.max(distanceBasedMinimumBufferMinutes, routeBasedMinimumBufferMinutes);
+
+    if (connection && minimumBufferMinutes > effectiveBufferMinutes) {
+      effectiveBufferMinutes = minimumBufferMinutes;
+      connection = await loadConnectionForBuffer(effectiveBufferMinutes);
+    }
 
     if (connection) {
       const delayPrediction = connection.departureIso
@@ -257,6 +336,9 @@ export const fetchEventConnection = async (
         connection: {
           ...connection,
           delayPrediction,
+          requestedBufferMinutes,
+          effectiveBufferMinutes,
+          minimumBufferMinutes,
         },
         connectionError: null,
       };

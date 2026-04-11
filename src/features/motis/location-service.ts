@@ -1,4 +1,3 @@
- 
 import { getLocale, translate } from '@/i18n';
 import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
 import { getCachedGeoLocation, storeCachedGeoLocation } from '@/lib/geo-cache';
@@ -11,6 +10,11 @@ export type Coordinates = {
 
 export type ResolvedLocation = {
   address: string | null;
+  coordinates: Coordinates | null;
+};
+
+export type LocationSuggestion = {
+  address: string;
   coordinates: Coordinates | null;
 };
 
@@ -174,6 +178,13 @@ const requestMotis = async <T>(
   return responseJson as T;
 };
 
+const toResolvedLocation = (match: MotisMatch, fallback?: string | null): ResolvedLocation => ({
+  address: formatAddress(match, fallback),
+  coordinates: isFiniteNumber(match.lat) && isFiniteNumber(match.lon)
+    ? { lat: match.lat, lon: match.lon }
+    : null,
+});
+
 export const formatCoordinates = ({ lat, lon }: Coordinates): string =>
   `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
 
@@ -271,6 +282,45 @@ export const geocodeLocation = async (text: string): Promise<ResolvedLocation> =
 
   storeCachedGeoLocation(cacheKey, resolved);
   return resolved;
+};
+
+export const searchLocationSuggestions = async (text: string, limit = 5): Promise<LocationSuggestion[]> => {
+  const normalized = text.trim();
+
+  if (normalized.length < 3) {
+    return [];
+  }
+
+  const params = new URLSearchParams({
+    text: normalized,
+  });
+
+  params.append('language', getLocale());
+
+  const url = `${MOTIS_API_GEOCODE}?${params.toString()}`;
+  const matches = await requestMotis<MotisMatch[]>(
+    'geocode',
+    url,
+    paramsToObject(params),
+  );
+
+  const seen = new Set<string>();
+
+  return matches
+    .map((match) => toResolvedLocation(match, normalized))
+    .filter((candidate) => Boolean(candidate.address))
+    .filter((candidate): candidate is LocationSuggestion => Boolean(candidate.address))
+    .filter((candidate) => {
+      const key = candidate.address.trim().toLocaleLowerCase(getLocale());
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    })
+    .slice(0, limit);
 };
 
 export const resolveLocation = async (value?: string | null): Promise<ResolvedLocation> => {

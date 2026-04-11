@@ -10,7 +10,7 @@ type ConnectionCacheEntry = {
   history: CachedConnection[];
 };
 
-const STORAGE_KEY = 'pendler_alarm_connection_cache_v2';
+const STORAGE_KEY = 'pendler_alarm_connection_cache_v3';
 const MAX_HISTORY = 6;
 
 const loadCache = (): Record<string, ConnectionCacheEntry> => {
@@ -31,6 +31,9 @@ const loadCache = (): Record<string, ConnectionCacheEntry> => {
   }
 };
 
+const createCacheKey = (eventId: string, requestedBufferMinutes: number): string =>
+  `${eventId}:${requestedBufferMinutes}`;
+
 let cache: Record<string, ConnectionCacheEntry> = loadCache();
 
 const saveCache = (): void => {
@@ -45,16 +48,18 @@ const saveCache = (): void => {
   }
 };
 
-export const getCachedConnection = (eventId: string): ConnectionCacheEntry | null =>
-  cache[eventId] ?? null;
+export const getCachedConnection = (eventId: string, requestedBufferMinutes: number): ConnectionCacheEntry | null =>
+  cache[createCacheKey(eventId, requestedBufferMinutes)] ?? null;
 
 export const storeConnection = (
   eventId: string,
+  requestedBufferMinutes: number,
   connection: ConnectionSummary,
   fetchedAt: string,
 ): void => {
+  const cacheKey = createCacheKey(eventId, requestedBufferMinutes);
   const entry: CachedConnection = { connection, fetchedAt };
-  const existing = cache[eventId];
+  const existing = cache[cacheKey];
   const history = existing?.history ?? [];
   const mergedHistory = [
     entry,
@@ -63,7 +68,7 @@ export const storeConnection = (
 
   cache = {
     ...cache,
-    [eventId]: {
+    [cacheKey]: {
       latest: entry,
       history: mergedHistory,
     },
