@@ -271,14 +271,33 @@ const getStopAddress = (stop: RouteStopEntry): string | null => {
   const isSameAsStopName = (address: string): boolean =>
     normalizeComparableText(address) === normalizeComparableText(stop.name);
 
+  const dedupeAddressParts = (address: string): string => {
+    const parts = address.split(',').map((part) => part.trim()).filter(Boolean);
+    const seen = new Set<string>();
+    const uniqueParts = parts.filter((part) => {
+      const key = normalizeComparableText(part);
+
+      if (!key || seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+
+    return uniqueParts.join(', ');
+  };
+
   if (stop.kind === 'start') {
     const originAddress = props.originAddress ?? null;
-    return originAddress && !isSameAsStopName(originAddress) ? originAddress : null;
+    const normalizedOriginAddress = originAddress ? dedupeAddressParts(originAddress) : null;
+    return normalizedOriginAddress && !isSameAsStopName(normalizedOriginAddress) ? normalizedOriginAddress : null;
   }
 
   if (stop.kind === 'end') {
     const destinationAddress = props.destinationAddress ?? null;
-    return destinationAddress && !isSameAsStopName(destinationAddress) ? destinationAddress : null;
+    const normalizedDestinationAddress = destinationAddress ? dedupeAddressParts(destinationAddress) : null;
+    return normalizedDestinationAddress && !isSameAsStopName(normalizedDestinationAddress) ? normalizedDestinationAddress : null;
   }
 
   return null;
@@ -884,102 +903,6 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
               </div>
             </div>
 
-            <section
-              v-if="hasStopMobilityHubData(stop) && getStopMobilityHubGroup(stop)"
-              class="connection-route-mobility"
-            >
-              <div class="connection-route-mobility-head">
-                <strong>{{ t('views.dashboard.events.connection.mobility.hubs') }}</strong>
-                <span class="connection-route-mobility-icons">
-                  <span v-if="getStopParkingSites(stop).length > 0" class="connection-route-mobility-icon-pill">
-                    <SvgIcon icon="material/local_parking" :dimension="14" aria-hidden="true" />
-                  </span>
-                  <span v-if="getStopSharingStations(stop).length > 0" class="connection-route-mobility-icon-pill">
-                    <SvgIcon icon="material/share" :dimension="14" aria-hidden="true" />
-                  </span>
-                </span>
-              </div>
-
-              <div
-                v-for="category in getSharingCategories(stop)"
-                :key="`sharing-${stop.key}-${category.id}`"
-                class="connection-route-mobility-subsection"
-              >
-                <strong class="connection-route-mobility-subtitle">
-                  <SvgIcon :icon="category.icon" :dimension="14" aria-hidden="true" />
-                  {{ category.title }}
-                </strong>
-                <article
-                  v-for="station in getVisibleItems(category.stations, getMobilityMoreKey(stop, 'sharing', category.id))"
-                  :key="station.stationId ?? `${stop.key}-${station.name}-${station.lat}-${station.lon}`"
-                  class="connection-route-mobility-item"
-                >
-                  <strong>{{ station.name }}</strong>
-                  <p>{{ t('views.dashboard.events.connection.mobility.operator', { value: normalizeOperatorLabel(station.operator) }) }}</p>
-                  <p>{{ t('views.dashboard.events.connection.mobility.distance', { value: getSharingDistanceLabel(stop, station) }) }}</p>
-                  <p v-if="station.capacity !== null">{{ t('views.dashboard.events.connection.mobility.capacity', { value: station.capacity }) }}</p>
-                  <ul v-if="station.realtimeAvailability.length > 0" class="connection-route-mobility-list">
-                    <li v-for="availability in station.realtimeAvailability" :key="`${station.stationId ?? station.name}-${availability.key}`">
-                      {{ t('views.dashboard.events.connection.mobility.realtimeCapacity', { mode: availability.mode, value: availability.value }) }}
-                    </li>
-                  </ul>
-                </article>
-                <button
-                  v-if="category.stations.length > 3"
-                  type="button"
-                  class="connection-route-mobility-more-button"
-                  @click="toggleMobilityExpanded(getMobilityMoreKey(stop, 'sharing', category.id))"
-                >
-                  {{
-                    isMobilityExpanded(getMobilityMoreKey(stop, 'sharing', category.id))
-                      ? t('views.dashboard.events.connection.mobility.showLess')
-                      : t('views.dashboard.events.connection.mobility.more')
-                  }}
-                </button>
-              </div>
-
-              <div
-                v-for="category in getParkingCategories(stop)"
-                :key="`parking-${stop.key}-${category.id}`"
-                class="connection-route-mobility-subsection"
-              >
-                <strong class="connection-route-mobility-subtitle">
-                  <span class="connection-route-mobility-parking-icon" aria-hidden="true">P</span>
-                  {{ category.title }}
-                </strong>
-                <article
-                  v-for="site in getVisibleItems(category.sites, getMobilityMoreKey(stop, 'parking', category.id))"
-                  :key="site.id ?? `${stop.key}-${site.name}-${site.lat}-${site.lon}`"
-                  class="connection-route-mobility-item"
-                >
-                  <strong>{{ site.name }}</strong>
-                  <p>{{ t('views.dashboard.events.connection.mobility.purpose', { value: getPurposeLabel(site.purpose) }) }}</p>
-                  <p>{{ t('views.dashboard.events.connection.mobility.distance', { value: getParkingDistanceLabel(stop, site) }) }}</p>
-                  <p v-if="site.capacity !== null">{{ t('views.dashboard.events.connection.mobility.capacity', { value: site.capacity }) }}</p>
-                  <p v-if="site.realtimeFreeCapacity !== null">{{ t('views.dashboard.events.connection.mobility.freeCapacity', { value: site.realtimeFreeCapacity }) }}</p>
-                  <img
-                    v-if="site.photoUrl"
-                    class="connection-route-mobility-photo"
-                    :src="site.photoUrl"
-                    :alt="t('views.dashboard.events.connection.mobility.photoAlt', { name: site.name })"
-                    loading="lazy"
-                  >
-                </article>
-                <button
-                  v-if="category.sites.length > 3"
-                  type="button"
-                  class="connection-route-mobility-more-button"
-                  @click="toggleMobilityExpanded(getMobilityMoreKey(stop, 'parking', category.id))"
-                >
-                  {{
-                    isMobilityExpanded(getMobilityMoreKey(stop, 'parking', category.id))
-                      ? t('views.dashboard.events.connection.mobility.showLess')
-                      : t('views.dashboard.events.connection.mobility.more')
-                  }}
-                </button>
-              </div>
-            </section>
-
             <div v-if="stop.incomingSegment && shouldShowIncomingLine(stop)" class="connection-route-lines">
               <span
                 v-if="getConnectionProductEmoji(stop.incomingSegment.productType)"
@@ -1120,6 +1043,90 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
                     </div>
                   </div>
                 </article>
+              </div>
+            </section>
+
+            <section
+              v-if="hasStopMobilityHubData(stop) && getStopMobilityHubGroup(stop)"
+              class="connection-route-mobility"
+            >
+              <div
+                v-for="category in getSharingCategories(stop)"
+                :key="`sharing-${stop.key}-${category.id}`"
+                class="connection-route-mobility-subsection"
+              >
+                <strong class="connection-route-mobility-subtitle">
+                  <SvgIcon :icon="category.icon" :dimension="14" aria-hidden="true" />
+                  {{ category.title }}
+                </strong>
+                <article
+                  v-for="station in getVisibleItems(category.stations, getMobilityMoreKey(stop, 'sharing', category.id))"
+                  :key="station.stationId ?? `${stop.key}-${station.name}-${station.lat}-${station.lon}`"
+                  class="connection-route-mobility-item"
+                >
+                  <strong>{{ station.name }}</strong>
+                  <p>{{ t('views.dashboard.events.connection.mobility.operator', { value: normalizeOperatorLabel(station.operator) }) }}</p>
+                  <p>{{ t('views.dashboard.events.connection.mobility.distance', { value: getSharingDistanceLabel(stop, station) }) }}</p>
+                  <p v-if="station.capacity !== null">{{ t('views.dashboard.events.connection.mobility.capacity', { value: station.capacity }) }}</p>
+                  <ul v-if="station.realtimeAvailability.length > 0" class="connection-route-mobility-list">
+                    <li v-for="availability in station.realtimeAvailability" :key="`${station.stationId ?? station.name}-${availability.key}`">
+                      {{ t('views.dashboard.events.connection.mobility.realtimeCapacity', { mode: availability.mode, value: availability.value }) }}
+                    </li>
+                  </ul>
+                </article>
+                <button
+                  v-if="category.stations.length > 3"
+                  type="button"
+                  class="connection-route-mobility-more-button"
+                  @click="toggleMobilityExpanded(getMobilityMoreKey(stop, 'sharing', category.id))"
+                >
+                  {{
+                    isMobilityExpanded(getMobilityMoreKey(stop, 'sharing', category.id))
+                      ? t('views.dashboard.events.connection.mobility.showLess')
+                      : t('views.dashboard.events.connection.mobility.more')
+                  }}
+                </button>
+              </div>
+
+              <div
+                v-for="category in getParkingCategories(stop)"
+                :key="`parking-${stop.key}-${category.id}`"
+                class="connection-route-mobility-subsection"
+              >
+                <strong class="connection-route-mobility-subtitle">
+                  <span class="connection-route-mobility-parking-icon" aria-hidden="true">P</span>
+                  {{ category.title }}
+                </strong>
+                <article
+                  v-for="site in getVisibleItems(category.sites, getMobilityMoreKey(stop, 'parking', category.id))"
+                  :key="site.id ?? `${stop.key}-${site.name}-${site.lat}-${site.lon}`"
+                  class="connection-route-mobility-item"
+                >
+                  <strong>{{ site.name }}</strong>
+                  <p>{{ t('views.dashboard.events.connection.mobility.purpose', { value: getPurposeLabel(site.purpose) }) }}</p>
+                  <p>{{ t('views.dashboard.events.connection.mobility.distance', { value: getParkingDistanceLabel(stop, site) }) }}</p>
+                  <p v-if="site.capacity !== null">{{ t('views.dashboard.events.connection.mobility.capacity', { value: site.capacity }) }}</p>
+                  <p v-if="site.realtimeFreeCapacity !== null">{{ t('views.dashboard.events.connection.mobility.freeCapacity', { value: site.realtimeFreeCapacity }) }}</p>
+                  <img
+                    v-if="site.photoUrl"
+                    class="connection-route-mobility-photo"
+                    :src="site.photoUrl"
+                    :alt="t('views.dashboard.events.connection.mobility.photoAlt', { name: site.name })"
+                    loading="lazy"
+                  >
+                </article>
+                <button
+                  v-if="category.sites.length > 3"
+                  type="button"
+                  class="connection-route-mobility-more-button"
+                  @click="toggleMobilityExpanded(getMobilityMoreKey(stop, 'parking', category.id))"
+                >
+                  {{
+                    isMobilityExpanded(getMobilityMoreKey(stop, 'parking', category.id))
+                      ? t('views.dashboard.events.connection.mobility.showLess')
+                      : t('views.dashboard.events.connection.mobility.more')
+                  }}
+                </button>
               </div>
             </section>
           </div>
@@ -1352,29 +1359,6 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-}
-
-.connection-route-mobility-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.connection-route-mobility-icons {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.connection-route-mobility-icon-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.08);
 }
 
 .connection-route-mobility-subsection {
