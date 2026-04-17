@@ -74,6 +74,41 @@ export type ConnectionTransferAssessment = {
   departureP90DelayMinutes: number | null;
 };
 
+export type MobilityHubSharingStation = {
+  stationId: string | null;
+  name: string;
+  operator: string | null;
+  capacity: number | null;
+  lat: number;
+  lon: number;
+  lastReported: string | null;
+  realtimeAvailability: Array<{
+    key: string;
+    mode: string;
+    value: number;
+  }>;
+};
+
+export type MobilityHubParkingSite = {
+  id: string | null;
+  name: string;
+  purpose: string | null;
+  capacity: number | null;
+  type: string | null;
+  lat: number;
+  lon: number;
+  modifiedAt: string | null;
+  photoUrl: string | null;
+  realtimeFreeCapacity: number | null;
+};
+
+export type ConnectionMobilityHubGroup = {
+  lat: number;
+  lon: number;
+  parkingSites: MobilityHubParkingSite[];
+  sharingStations: MobilityHubSharingStation[];
+};
+
 export type ConnectionDelayPrediction = {
   likelyConnection: ConnectionOption | null;
   expectedDepartureDelayMinutes: number | null;
@@ -85,6 +120,9 @@ export type ConnectionDelayPrediction = {
   probabilityArrivalLate: number | null;
   calls: ConnectionDelayCall[];
   transferAssessments: ConnectionTransferAssessment[];
+  mobilityHubRadiusMeters: number | null;
+  originMobilityHubs: ConnectionMobilityHubGroup | null;
+  destinationMobilityHubs: ConnectionMobilityHubGroup | null;
   historyAvailable: boolean;
   historyNote: string | null;
 };

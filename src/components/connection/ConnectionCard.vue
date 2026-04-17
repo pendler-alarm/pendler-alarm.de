@@ -5,8 +5,11 @@ import SvgIcon from '@/components/SvgIcon.vue';
 import SharingOptionCard from '@/components/connection/SharingOptionCard.vue';
 import ConnectionRouteDetails from '@/components/connection/ConnectionRouteDetails.vue';
 import type {
+  ConnectionMobilityHubGroup,
   ConnectionOption,
   ConnectionSummary,
+  MobilityHubParkingSite,
+  MobilityHubSharingStation,
 } from '@/features/motis/routing-service';
 import {
   buildBahnBookingUrl,
@@ -140,6 +143,101 @@ const routeRiskLabel = computed(() => {
 
   return `${Math.round(riskyTransfer.value.successProbability * 100)} %`;
 });
+
+const toRad = (value: number): number => (value * Math.PI) / 180;
+
+const getDistanceKilometers = (
+  from: { lat: number; lon: number },
+  to: { lat: number; lon: number },
+): number => {
+  const radius = 6371;
+  const dLat = toRad(to.lat - from.lat);
+  const dLon = toRad(to.lon - from.lon);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(from.lat)) * Math.cos(toRad(to.lat)) * Math.sin(dLon / 2) ** 2;
+
+  return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const formatDistanceKilometers = (distanceKilometers: number): string => (
+  `${distanceKilometers < 10 ? distanceKilometers.toFixed(2) : distanceKilometers.toFixed(1)} km`
+);
+
+const normalizeOperatorLabel = (operator: string | null): string => {
+  if (!operator) {
+    return t('views.dashboard.events.connection.mobility.unknownOperator');
+  }
+
+  const normalized = operator
+    .replaceAll(/[_-]+/gu, ' ')
+    .replaceAll(/\s+/gu, ' ')
+    .trim();
+
+  return normalized
+    .split(' ')
+    .map((token) => token ? `${token.charAt(0).toUpperCase()}${token.slice(1)}` : token)
+    .join(' ');
+};
+
+const getPurposeLabel = (purpose: string | null): string => {
+  switch (purpose?.toUpperCase()) {
+  case 'BIKE':
+    return t('views.dashboard.events.connection.mobility.purposeBike');
+  case 'CAR':
+    return t('views.dashboard.events.connection.mobility.purposeCar');
+  default:
+    return t('views.dashboard.events.connection.mobility.purposeUnknown');
+  }
+};
+
+const mobilityHubSections = computed(() => {
+  const prediction = props.connection.delayPrediction;
+
+  if (!prediction) {
+    return [];
+  }
+
+  const sections: Array<{
+    key: 'origin' | 'destination';
+    title: string;
+    group: ConnectionMobilityHubGroup;
+  }> = [];
+
+  if (prediction.originMobilityHubs) {
+    sections.push({
+      key: 'origin',
+      title: t('views.dashboard.events.connection.mobility.origin'),
+      group: prediction.originMobilityHubs,
+    });
+  }
+
+  if (prediction.destinationMobilityHubs) {
+    sections.push({
+      key: 'destination',
+      title: t('views.dashboard.events.connection.mobility.destination'),
+      group: prediction.destinationMobilityHubs,
+    });
+  }
+
+  return sections;
+});
+
+const getSharingDistanceLabel = (group: ConnectionMobilityHubGroup, station: MobilityHubSharingStation): string =>
+  formatDistanceKilometers(getDistanceKilometers(
+    { lat: group.lat, lon: group.lon },
+    { lat: station.lat, lon: station.lon },
+  ));
+
+const getParkingDistanceLabel = (group: ConnectionMobilityHubGroup, site: MobilityHubParkingSite): string =>
+  formatDistanceKilometers(getDistanceKilometers(
+    { lat: group.lat, lon: group.lon },
+    { lat: site.lat, lon: site.lon },
+  ));
+
+const hasMobilityHubData = computed(() =>
+  mobilityHubSections.value.some((section) =>
+    section.group.parkingSites.length > 0 || section.group.sharingStations.length > 0),
+);
 
 const showRaisedBufferHint = computed(() =>
   props.connection.effectiveBufferMinutes > props.connection.requestedBufferMinutes,
@@ -286,6 +384,76 @@ const toggleExpanded = (): void => {
           ⚠️ {{ t('views.dashboard.events.connection.bufferEffective', { count: connection.effectiveBufferMinutes }) }}
         </span>
       </div>
+
+      <section v-if="hasMobilityHubData" class="connection-mobility">
+        <strong class="connection-mobility-title">
+          {{ t('views.dashboard.events.connection.mobility.title') }}
+        </strong>
+        <details
+          v-for="section in mobilityHubSections"
+          :key="section.key"
+          class="connection-mobility-panel"
+        >
+          <summary class="connection-mobility-summary">
+            <span class="connection-mobility-summary-label">{{ section.title }}</span>
+            <span class="connection-mobility-summary-icons">
+              <span v-if="section.group.parkingSites.length > 0" class="connection-mobility-icon-pill">
+                <SvgIcon icon="material/local_parking" :dimension="16" aria-hidden="true" />
+              </span>
+              <span v-if="section.group.sharingStations.length > 0" class="connection-mobility-icon-pill">
+                <SvgIcon icon="material/share" :dimension="16" aria-hidden="true" />
+              </span>
+            </span>
+          </summary>
+
+          <div class="connection-mobility-content">
+            <div v-if="section.group.sharingStations.length > 0" class="connection-mobility-subsection">
+              <strong class="connection-mobility-subtitle">
+                {{ t('views.dashboard.events.connection.mobility.sharing') }}
+              </strong>
+              <article
+                v-for="station in section.group.sharingStations"
+                :key="station.stationId ?? `${section.key}-${station.name}-${station.lat}-${station.lon}`"
+                class="connection-mobility-item"
+              >
+                <strong>{{ station.name }}</strong>
+                <p>{{ t('views.dashboard.events.connection.mobility.operator', { value: normalizeOperatorLabel(station.operator) }) }}</p>
+                <p>{{ t('views.dashboard.events.connection.mobility.distance', { value: getSharingDistanceLabel(section.group, station) }) }}</p>
+                <p v-if="station.capacity !== null">{{ t('views.dashboard.events.connection.mobility.capacity', { value: station.capacity }) }}</p>
+                <ul v-if="station.realtimeAvailability.length > 0" class="connection-mobility-list">
+                  <li v-for="availability in station.realtimeAvailability" :key="`${station.stationId ?? station.name}-${availability.key}`">
+                    {{ t('views.dashboard.events.connection.mobility.realtimeCapacity', { mode: availability.mode, value: availability.value }) }}
+                  </li>
+                </ul>
+              </article>
+            </div>
+
+            <div v-if="section.group.parkingSites.length > 0" class="connection-mobility-subsection">
+              <strong class="connection-mobility-subtitle">
+                {{ t('views.dashboard.events.connection.mobility.parking') }}
+              </strong>
+              <article
+                v-for="site in section.group.parkingSites"
+                :key="site.id ?? `${section.key}-${site.name}-${site.lat}-${site.lon}`"
+                class="connection-mobility-item"
+              >
+                <strong>{{ site.name }}</strong>
+                <p>{{ t('views.dashboard.events.connection.mobility.purpose', { value: getPurposeLabel(site.purpose) }) }}</p>
+                <p>{{ t('views.dashboard.events.connection.mobility.distance', { value: getParkingDistanceLabel(section.group, site) }) }}</p>
+                <p v-if="site.capacity !== null">{{ t('views.dashboard.events.connection.mobility.capacity', { value: site.capacity }) }}</p>
+                <p v-if="site.realtimeFreeCapacity !== null">{{ t('views.dashboard.events.connection.mobility.freeCapacity', { value: site.realtimeFreeCapacity }) }}</p>
+                <img
+                  v-if="site.photoUrl"
+                  class="connection-mobility-photo"
+                  :src="site.photoUrl"
+                  :alt="t('views.dashboard.events.connection.mobility.photoAlt', { name: site.name })"
+                  loading="lazy"
+                >
+              </article>
+            </div>
+          </div>
+        </details>
+      </section>
 
       <div class="connection-buffer-control">
         <div class="connection-buffer-header">
@@ -690,6 +858,102 @@ const toggleExpanded = (): void => {
 
 .connection-facts--alternative {
   margin-bottom: 2px;
+}
+
+.connection-mobility {
+  display: grid;
+  gap: 8px;
+}
+
+.connection-mobility-title {
+  font-size: 0.9rem;
+  color: #7f1d1d;
+}
+
+.connection-mobility-panel {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(255, 255, 255, 0.76);
+  overflow: hidden;
+}
+
+.connection-mobility-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.connection-mobility-summary::-webkit-details-marker {
+  display: none;
+}
+
+.connection-mobility-summary-label {
+  font-weight: 700;
+}
+
+.connection-mobility-summary-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.connection-mobility-icon-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.connection-mobility-content {
+  display: grid;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+.connection-mobility-subsection {
+  display: grid;
+  gap: 8px;
+}
+
+.connection-mobility-subtitle {
+  font-size: 0.82rem;
+  color: #334155;
+}
+
+.connection-mobility-item {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.connection-mobility-item p {
+  margin: 0;
+  color: #334155;
+  font-size: 0.82rem;
+}
+
+.connection-mobility-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #334155;
+  font-size: 0.82rem;
+}
+
+.connection-mobility-photo {
+  width: 100%;
+  max-width: 240px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  margin-top: 4px;
 }
 
 .connection-route-switch {

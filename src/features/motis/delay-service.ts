@@ -3,6 +3,7 @@ import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
 import type { Coordinates } from '@/features/motis/location-service';
 import {
   buildConnectionSummaryFromPlanResponse,
+  type ConnectionMobilityHubGroup,
   type ConnectionDelayCall,
   type ConnectionDelayDistributionBucket,
   type ConnectionDelayPrediction,
@@ -17,6 +18,9 @@ type DelayPredictionResponse = {
     predictions?: unknown;
     offset?: number;
   };
+  mobility_hub_radius_m?: unknown;
+  origin_mobility_hubs?: unknown;
+  destination_mobility_hubs?: unknown;
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -39,6 +43,121 @@ const normalizePredictionRows = (value: unknown): number[][] => (
     ? value.map((row) => Array.isArray(row) ? row.map((entry) => typeof entry === 'number' ? entry : 0) : [])
     : []
 );
+
+const toNumber = (value: unknown): number | null => (
+  typeof value === 'number' && Number.isFinite(value) ? value : null
+);
+
+const toOptionalString = (value: unknown): string | null => (
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+);
+
+const normalizeSharingMode = (realtimeKey: string): string => {
+  const rawMode = realtimeKey.replace(/^num_/u, '').replace(/_available$/u, '');
+
+  if (!rawMode) {
+    return 'Vehicle';
+  }
+
+  if (rawMode.endsWith('s') && rawMode.length > 1) {
+    return `${rawMode.charAt(0).toUpperCase()}${rawMode.slice(1, -1)}`;
+  }
+
+  return `${rawMode.charAt(0).toUpperCase()}${rawMode.slice(1)}`;
+};
+
+const normalizeMobilityHubGroup = (value: unknown): ConnectionMobilityHubGroup | null => {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  const lat = toNumber(value.lat);
+  const lon = toNumber(value.lon);
+
+  if (lat === null || lon === null) {
+    return null;
+  }
+
+  const parkingSites = Array.isArray(value.parking_sites)
+    ? value.parking_sites.flatMap((entry) => {
+      if (!isObject(entry)) {
+        return [];
+      }
+
+      const siteLat = toNumber(entry.lat);
+      const siteLon = toNumber(entry.lon);
+
+      if (siteLat === null || siteLon === null) {
+        return [];
+      }
+
+      return [{
+        id: toOptionalString(entry.id),
+        name: toOptionalString(entry.name) ?? translate('views.dashboard.events.connection.mobility.unknownParkingName'),
+        purpose: toOptionalString(entry.purpose),
+        capacity: toNumber(entry.capacity),
+        type: toOptionalString(entry.type),
+        lat: siteLat,
+        lon: siteLon,
+        modifiedAt: toOptionalString(entry.modified_at),
+        photoUrl: toOptionalString(entry.photo_url),
+        realtimeFreeCapacity: toNumber(entry.realtime_free_capacity),
+      }];
+    })
+    : [];
+
+  const sharingStations = Array.isArray(value.sharing_stations)
+    ? value.sharing_stations.flatMap((entry) => {
+      if (!isObject(entry)) {
+        return [];
+      }
+
+      const stationLat = toNumber(entry.lat);
+      const stationLon = toNumber(entry.lon);
+
+      if (stationLat === null || stationLon === null) {
+        return [];
+      }
+
+      const realtimeAvailability = Object.entries(entry)
+        .flatMap(([key, stationValue]) => {
+          if (!/^num_.*_available$/u.test(key)) {
+            return [];
+          }
+
+          const valueNumber = toNumber(stationValue);
+
+          if (valueNumber === null) {
+            return [];
+          }
+
+          return [{
+            key,
+            mode: normalizeSharingMode(key),
+            value: valueNumber,
+          }];
+        });
+
+      return [{
+        stationId: toOptionalString(entry.station_id),
+        name: toOptionalString(entry.name) ?? translate('views.dashboard.events.connection.mobility.unknownSharingName'),
+        operator: toOptionalString(entry.operator),
+        capacity: toNumber(entry.capacity),
+        lat: stationLat,
+        lon: stationLon,
+        lastReported: toOptionalString(entry.last_reported),
+        realtimeAvailability,
+      }];
+    })
+    : [];
+
+  return {
+    lat,
+    lon,
+    parkingSites,
+    sharingStations,
+  };
+};
 
 const getDistribution = (row: number[], offset: number): ConnectionDelayDistributionBucket[] => row
   .map((probability, index) => ({
@@ -390,6 +509,9 @@ export const fetchDelayPrediction = async (
     probabilityArrivalLate: arrivalCall?.probabilityLate ?? null,
     calls,
     transferAssessments,
+    mobilityHubRadiusMeters: toNumber(delayPayload.mobility_hub_radius_m),
+    originMobilityHubs: normalizeMobilityHubGroup(delayPayload.origin_mobility_hubs),
+    destinationMobilityHubs: normalizeMobilityHubGroup(delayPayload.destination_mobility_hubs),
     historyAvailable: rows.length > 0,
     historyNote: rows.length > 0
       ? translate('views.dashboard.events.connection.delayAverageNote')
