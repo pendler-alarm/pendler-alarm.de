@@ -52,6 +52,22 @@ const toOptionalString = (value: unknown): string | null => (
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 );
 
+const normalizeHubName = (value: unknown): string | null => {
+  const raw = toOptionalString(value);
+
+  if (!raw) {
+    return null;
+  }
+
+  const normalized = raw
+    .replaceAll(/[_|]+/gu, ' ')
+    .replaceAll(/[^\p{L}\p{N}\s().,&+\-/:]/gu, ' ')
+    .replaceAll(/\s+/gu, ' ')
+    .trim();
+
+  return normalized.length > 0 ? normalized : null;
+};
+
 const normalizeSharingMode = (realtimeKey: string): string => {
   const rawMode = realtimeKey.replace(/^num_/u, '').replace(/_available$/u, '');
 
@@ -93,7 +109,7 @@ const normalizeMobilityHubGroup = (value: unknown): ConnectionMobilityHubGroup |
 
       return [{
         id: toOptionalString(entry.id),
-        name: toOptionalString(entry.name) ?? translate('views.dashboard.events.connection.mobility.unknownParkingName'),
+        name: normalizeHubName(entry.name) ?? translate('views.dashboard.events.connection.mobility.unknownParkingName'),
         purpose: toOptionalString(entry.purpose),
         capacity: toNumber(entry.capacity),
         type: toOptionalString(entry.type),
@@ -140,7 +156,7 @@ const normalizeMobilityHubGroup = (value: unknown): ConnectionMobilityHubGroup |
 
       return [{
         stationId: toOptionalString(entry.station_id),
-        name: toOptionalString(entry.name) ?? translate('views.dashboard.events.connection.mobility.unknownSharingName'),
+        name: normalizeHubName(entry.name) ?? translate('views.dashboard.events.connection.mobility.unknownSharingName'),
         operator: toOptionalString(entry.operator),
         capacity: toNumber(entry.capacity),
         lat: stationLat,

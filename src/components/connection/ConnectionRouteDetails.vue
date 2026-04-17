@@ -36,6 +36,7 @@ const props = defineProps<{
 
 const { t } = useI18n();
 const selectedStopIndex = ref<number | null>(null);
+const expandedMobilityGroups = ref<Record<string, boolean>>({});
 
 type DelayBand = {
   key: string;
@@ -262,12 +263,22 @@ const hasStationChange = (stop: RouteStopEntry): boolean => {
 };
 
 const getStopAddress = (stop: RouteStopEntry): string | null => {
+  const normalizeComparableText = (value: string): string => value
+    .toLowerCase()
+    .replaceAll(/[^\p{L}\p{N}]+/gu, '')
+    .trim();
+
+  const isSameAsStopName = (address: string): boolean =>
+    normalizeComparableText(address) === normalizeComparableText(stop.name);
+
   if (stop.kind === 'start') {
-    return props.originAddress ?? null;
+    const originAddress = props.originAddress ?? null;
+    return originAddress && !isSameAsStopName(originAddress) ? originAddress : null;
   }
 
   if (stop.kind === 'end') {
-    return props.destinationAddress ?? null;
+    const destinationAddress = props.destinationAddress ?? null;
+    return destinationAddress && !isSameAsStopName(destinationAddress) ? destinationAddress : null;
   }
 
   return null;
@@ -351,21 +362,145 @@ const getStopSharingStations = (stop: RouteStopEntry): MobilityHubSharingStation
 const getStopParkingSites = (stop: RouteStopEntry): MobilityHubParkingSite[] =>
   getStopMobilityHubGroup(stop)?.parkingSites ?? [];
 
-const hasSharingMode = (stop: RouteStopEntry, mode: string): boolean =>
-  getStopSharingStations(stop).some((station) => station.realtimeAvailability
-    .some((availability) => availability.mode.toLowerCase() === mode.toLowerCase()));
+const getStationDistanceKm = (stop: RouteStopEntry, station: MobilityHubSharingStation): number | null => {
+  const group = getStopMobilityHubGroup(stop);
 
-const getSharingDistanceLabel = (group: ConnectionMobilityHubGroup, station: MobilityHubSharingStation): string =>
-  formatDistanceKilometers(getDistanceKilometers(
+  if (!group) {
+    return null;
+  }
+
+  return getDistanceKilometers(
     { lat: group.lat, lon: group.lon },
     { lat: station.lat, lon: station.lon },
-  ));
+  );
+};
 
-const getParkingDistanceLabel = (group: ConnectionMobilityHubGroup, site: MobilityHubParkingSite): string =>
-  formatDistanceKilometers(getDistanceKilometers(
+const getParkingDistanceKm = (stop: RouteStopEntry, site: MobilityHubParkingSite): number | null => {
+  const group = getStopMobilityHubGroup(stop);
+
+  if (!group) {
+    return null;
+  }
+
+  return getDistanceKilometers(
     { lat: group.lat, lon: group.lon },
     { lat: site.lat, lon: site.lon },
-  ));
+  );
+};
+
+const toSortedByDistance = <T>(items: T[], getDistanceKm: (item: T) => number | null): T[] => (
+  [...items].sort((left, right) => (getDistanceKm(left) ?? Number.POSITIVE_INFINITY) - (getDistanceKm(right) ?? Number.POSITIVE_INFINITY))
+);
+
+type SharingCategory = {
+  id: 'car' | 'bike' | 'scooter';
+  title: string;
+  icon: string;
+  stations: MobilityHubSharingStation[];
+};
+
+const getSharingCategory = (station: MobilityHubSharingStation): SharingCategory['id'] | null => {
+  const modes = station.realtimeAvailability.map((entry) => entry.mode.toLowerCase());
+
+  if (modes.includes('car')) {
+    return 'car';
+  }
+
+  if (modes.includes('bike')) {
+    return 'bike';
+  }
+
+  if (modes.includes('scooter')) {
+    return 'scooter';
+  }
+
+  return null;
+};
+
+const getSharingCategories = (stop: RouteStopEntry): SharingCategory[] => {
+  const stations = getStopSharingStations(stop);
+  const grouped = {
+    car: [] as MobilityHubSharingStation[],
+    bike: [] as MobilityHubSharingStation[],
+    scooter: [] as MobilityHubSharingStation[],
+  };
+
+  stations.forEach((station) => {
+    const category = getSharingCategory(station);
+
+    if (category) {
+      grouped[category].push(station);
+    }
+  });
+
+  const base = [
+    {
+      id: 'car' as const,
+      title: t('views.dashboard.events.connection.mobility.carsharing'),
+      icon: 'material/directions_car',
+      stations: toSortedByDistance(grouped.car, (station) => getStationDistanceKm(stop, station)),
+    },
+    {
+      id: 'bike' as const,
+      title: t('views.dashboard.events.connection.mobility.bikesharing'),
+      icon: 'material/directions_bike',
+      stations: toSortedByDistance(grouped.bike, (station) => getStationDistanceKm(stop, station)),
+    },
+    {
+      id: 'scooter' as const,
+      title: t('views.dashboard.events.connection.mobility.scootersharing'),
+      icon: 'material/electric_scooter',
+      stations: toSortedByDistance(grouped.scooter, (station) => getStationDistanceKm(stop, station)),
+    },
+  ];
+
+  return base.filter((entry) => entry.stations.length > 0);
+};
+
+type ParkingCategory = {
+  id: 'bike' | 'car';
+  title: string;
+  sites: MobilityHubParkingSite[];
+};
+
+const getParkingCategories = (stop: RouteStopEntry): ParkingCategory[] => {
+  const sites = getStopParkingSites(stop);
+  const bikeSites = toSortedByDistance(
+    sites.filter((site) => site.purpose?.toUpperCase() === 'BIKE'),
+    (site) => getParkingDistanceKm(stop, site),
+  );
+  const carSites = toSortedByDistance(
+    sites.filter((site) => site.purpose?.toUpperCase() === 'CAR'),
+    (site) => getParkingDistanceKm(stop, site),
+  );
+
+  return [
+    { id: 'bike' as const, title: t('views.dashboard.events.connection.mobility.bicycleParking'), sites: bikeSites },
+    { id: 'car' as const, title: t('views.dashboard.events.connection.mobility.carParking'), sites: carSites },
+  ].filter((entry) => entry.sites.length > 0);
+};
+
+const getMobilityMoreKey = (stop: RouteStopEntry, section: 'sharing' | 'parking', category: string): string =>
+  `${stop.key}-${section}-${category}`;
+
+const isMobilityExpanded = (key: string): boolean => expandedMobilityGroups.value[key] === true;
+
+const toggleMobilityExpanded = (key: string): void => {
+  expandedMobilityGroups.value = {
+    ...expandedMobilityGroups.value,
+    [key]: !isMobilityExpanded(key),
+  };
+};
+
+const getVisibleItems = <T>(items: T[], key: string): T[] => (
+  isMobilityExpanded(key) ? items : items.slice(0, 3)
+);
+
+const getSharingDistanceLabel = (stop: RouteStopEntry, station: MobilityHubSharingStation): string =>
+  formatDistanceKilometers(getStationDistanceKm(stop, station) ?? 0);
+
+const getParkingDistanceLabel = (stop: RouteStopEntry, site: MobilityHubParkingSite): string =>
+  formatDistanceKilometers(getParkingDistanceKm(stop, site) ?? 0);
 
 const getTransitIncomingSegment = (index: number): ConnectionSegment | null => {
   const stop = routeStops.value[index];
@@ -765,30 +900,23 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
                 </span>
               </div>
 
-              <div v-if="getStopSharingStations(stop).length > 0" class="connection-route-mobility-subsection">
+              <div
+                v-for="category in getSharingCategories(stop)"
+                :key="`sharing-${stop.key}-${category.id}`"
+                class="connection-route-mobility-subsection"
+              >
                 <strong class="connection-route-mobility-subtitle">
-                  <SvgIcon
-                    v-if="hasSharingMode(stop, 'bike')"
-                    icon="material/directions_bike"
-                    :dimension="14"
-                    aria-hidden="true"
-                  />
-                  <SvgIcon
-                    v-if="hasSharingMode(stop, 'car')"
-                    icon="material/directions_car"
-                    :dimension="14"
-                    aria-hidden="true"
-                  />
-                  {{ t('views.dashboard.events.connection.mobility.sharing') }}
+                  <SvgIcon :icon="category.icon" :dimension="14" aria-hidden="true" />
+                  {{ category.title }}
                 </strong>
                 <article
-                  v-for="station in getStopSharingStations(stop)"
+                  v-for="station in getVisibleItems(category.stations, getMobilityMoreKey(stop, 'sharing', category.id))"
                   :key="station.stationId ?? `${stop.key}-${station.name}-${station.lat}-${station.lon}`"
                   class="connection-route-mobility-item"
                 >
                   <strong>{{ station.name }}</strong>
                   <p>{{ t('views.dashboard.events.connection.mobility.operator', { value: normalizeOperatorLabel(station.operator) }) }}</p>
-                  <p>{{ t('views.dashboard.events.connection.mobility.distance', { value: getSharingDistanceLabel(getStopMobilityHubGroup(stop)!, station) }) }}</p>
+                  <p>{{ t('views.dashboard.events.connection.mobility.distance', { value: getSharingDistanceLabel(stop, station) }) }}</p>
                   <p v-if="station.capacity !== null">{{ t('views.dashboard.events.connection.mobility.capacity', { value: station.capacity }) }}</p>
                   <ul v-if="station.realtimeAvailability.length > 0" class="connection-route-mobility-list">
                     <li v-for="availability in station.realtimeAvailability" :key="`${station.stationId ?? station.name}-${availability.key}`">
@@ -796,21 +924,37 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
                     </li>
                   </ul>
                 </article>
+                <button
+                  v-if="category.stations.length > 3"
+                  type="button"
+                  class="connection-route-mobility-more-button"
+                  @click="toggleMobilityExpanded(getMobilityMoreKey(stop, 'sharing', category.id))"
+                >
+                  {{
+                    isMobilityExpanded(getMobilityMoreKey(stop, 'sharing', category.id))
+                      ? t('views.dashboard.events.connection.mobility.showLess')
+                      : t('views.dashboard.events.connection.mobility.more')
+                  }}
+                </button>
               </div>
 
-              <div v-if="getStopParkingSites(stop).length > 0" class="connection-route-mobility-subsection">
+              <div
+                v-for="category in getParkingCategories(stop)"
+                :key="`parking-${stop.key}-${category.id}`"
+                class="connection-route-mobility-subsection"
+              >
                 <strong class="connection-route-mobility-subtitle">
                   <span class="connection-route-mobility-parking-icon" aria-hidden="true">P</span>
-                  {{ t('views.dashboard.events.connection.mobility.parking') }}
+                  {{ category.title }}
                 </strong>
                 <article
-                  v-for="site in getStopParkingSites(stop)"
+                  v-for="site in getVisibleItems(category.sites, getMobilityMoreKey(stop, 'parking', category.id))"
                   :key="site.id ?? `${stop.key}-${site.name}-${site.lat}-${site.lon}`"
                   class="connection-route-mobility-item"
                 >
                   <strong>{{ site.name }}</strong>
                   <p>{{ t('views.dashboard.events.connection.mobility.purpose', { value: getPurposeLabel(site.purpose) }) }}</p>
-                  <p>{{ t('views.dashboard.events.connection.mobility.distance', { value: getParkingDistanceLabel(getStopMobilityHubGroup(stop)!, site) }) }}</p>
+                  <p>{{ t('views.dashboard.events.connection.mobility.distance', { value: getParkingDistanceLabel(stop, site) }) }}</p>
                   <p v-if="site.capacity !== null">{{ t('views.dashboard.events.connection.mobility.capacity', { value: site.capacity }) }}</p>
                   <p v-if="site.realtimeFreeCapacity !== null">{{ t('views.dashboard.events.connection.mobility.freeCapacity', { value: site.realtimeFreeCapacity }) }}</p>
                   <img
@@ -821,6 +965,18 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
                     loading="lazy"
                   >
                 </article>
+                <button
+                  v-if="category.sites.length > 3"
+                  type="button"
+                  class="connection-route-mobility-more-button"
+                  @click="toggleMobilityExpanded(getMobilityMoreKey(stop, 'parking', category.id))"
+                >
+                  {{
+                    isMobilityExpanded(getMobilityMoreKey(stop, 'parking', category.id))
+                      ? t('views.dashboard.events.connection.mobility.showLess')
+                      : t('views.dashboard.events.connection.mobility.more')
+                  }}
+                </button>
               </div>
             </section>
 
@@ -1072,6 +1228,7 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
   min-width: 0;
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  overflow: hidden;
 }
 
 .connection-route-stop-trigger {
@@ -1160,7 +1317,8 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
 .connection-route-stop-details {
   display: grid;
   gap: 10px;
-  padding: 10px 0 4px;
+  padding: 10px 8px 4px 0;
+  min-width: 0;
 }
 
 .connection-route-address-row,
@@ -1252,12 +1410,18 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
   padding: 8px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.82);
+  min-width: 0;
 }
 
 .connection-route-mobility-item p {
   margin: 0;
   color: #334155;
   font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.connection-route-mobility-item strong {
+  overflow-wrap: anywhere;
 }
 
 .connection-route-mobility-list {
@@ -1273,6 +1437,22 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
   border-radius: 10px;
   border: 1px solid rgba(148, 163, 184, 0.3);
   margin-top: 4px;
+}
+
+.connection-route-mobility-more-button {
+  justify-self: start;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.92);
+  color: #334155;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.connection-route-detail-value {
+  overflow-wrap: anywhere;
 }
 
 .connection-route-detail-row {
