@@ -229,8 +229,7 @@ export const de = {
           delayAverageNote: 'Berechnet aus predictor_response.predictions der Delay-API.',
           delayStopHistoryTitle: 'Delay- und Historiendaten',
           mobility: {
-            origin: 'Start',
-            destination: 'Ziel',
+            hubs: 'Mobility hubs',
             sharing: 'Sharing',
             parking: 'Parken',
             operator: 'Betreiber: {value}',

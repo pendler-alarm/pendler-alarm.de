@@ -345,6 +345,16 @@ const hasStopMobilityHubData = (stop: RouteStopEntry): boolean => {
   return group.parkingSites.length > 0 || group.sharingStations.length > 0;
 };
 
+const getStopSharingStations = (stop: RouteStopEntry): MobilityHubSharingStation[] =>
+  getStopMobilityHubGroup(stop)?.sharingStations ?? [];
+
+const getStopParkingSites = (stop: RouteStopEntry): MobilityHubParkingSite[] =>
+  getStopMobilityHubGroup(stop)?.parkingSites ?? [];
+
+const hasSharingMode = (stop: RouteStopEntry, mode: string): boolean =>
+  getStopSharingStations(stop).some((station) => station.realtimeAvailability
+    .some((availability) => availability.mode.toLowerCase() === mode.toLowerCase()));
+
 const getSharingDistanceLabel = (group: ConnectionMobilityHubGroup, station: MobilityHubSharingStation): string =>
   formatDistanceKilometers(getDistanceKilometers(
     { lat: group.lat, lon: group.lon },
@@ -744,38 +754,35 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
               class="connection-route-mobility"
             >
               <div class="connection-route-mobility-head">
-                <strong>
-                  {{
-                    stop.kind === 'start'
-                      ? t('views.dashboard.events.connection.mobility.origin')
-                      : t('views.dashboard.events.connection.mobility.destination')
-                  }}
-                </strong>
+                <strong>{{ t('views.dashboard.events.connection.mobility.hubs') }}</strong>
                 <span class="connection-route-mobility-icons">
-                  <span
-                    v-if="(getStopMobilityHubGroup(stop)?.parkingSites.length ?? 0) > 0"
-                    class="connection-route-mobility-icon-pill"
-                  >
+                  <span v-if="getStopParkingSites(stop).length > 0" class="connection-route-mobility-icon-pill">
                     <SvgIcon icon="material/local_parking" :dimension="14" aria-hidden="true" />
                   </span>
-                  <span
-                    v-if="(getStopMobilityHubGroup(stop)?.sharingStations.length ?? 0) > 0"
-                    class="connection-route-mobility-icon-pill"
-                  >
+                  <span v-if="getStopSharingStations(stop).length > 0" class="connection-route-mobility-icon-pill">
                     <SvgIcon icon="material/share" :dimension="14" aria-hidden="true" />
                   </span>
                 </span>
               </div>
 
-              <div
-                v-if="(getStopMobilityHubGroup(stop)?.sharingStations.length ?? 0) > 0"
-                class="connection-route-mobility-subsection"
-              >
+              <div v-if="getStopSharingStations(stop).length > 0" class="connection-route-mobility-subsection">
                 <strong class="connection-route-mobility-subtitle">
+                  <SvgIcon
+                    v-if="hasSharingMode(stop, 'bike')"
+                    icon="material/directions_bike"
+                    :dimension="14"
+                    aria-hidden="true"
+                  />
+                  <SvgIcon
+                    v-if="hasSharingMode(stop, 'car')"
+                    icon="material/directions_car"
+                    :dimension="14"
+                    aria-hidden="true"
+                  />
                   {{ t('views.dashboard.events.connection.mobility.sharing') }}
                 </strong>
                 <article
-                  v-for="station in getStopMobilityHubGroup(stop)?.sharingStations ?? []"
+                  v-for="station in getStopSharingStations(stop)"
                   :key="station.stationId ?? `${stop.key}-${station.name}-${station.lat}-${station.lon}`"
                   class="connection-route-mobility-item"
                 >
@@ -791,15 +798,13 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
                 </article>
               </div>
 
-              <div
-                v-if="(getStopMobilityHubGroup(stop)?.parkingSites.length ?? 0) > 0"
-                class="connection-route-mobility-subsection"
-              >
+              <div v-if="getStopParkingSites(stop).length > 0" class="connection-route-mobility-subsection">
                 <strong class="connection-route-mobility-subtitle">
+                  <span class="connection-route-mobility-parking-icon" aria-hidden="true">P</span>
                   {{ t('views.dashboard.events.connection.mobility.parking') }}
                 </strong>
                 <article
-                  v-for="site in getStopMobilityHubGroup(stop)?.parkingSites ?? []"
+                  v-for="site in getStopParkingSites(stop)"
                   :key="site.id ?? `${stop.key}-${site.name}-${site.lat}-${site.lon}`"
                   class="connection-route-mobility-item"
                 >
@@ -1220,8 +1225,25 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
 }
 
 .connection-route-mobility-subtitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: #334155;
   font-size: 0.82rem;
+}
+
+.connection-route-mobility-parking-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .connection-route-mobility-item {
