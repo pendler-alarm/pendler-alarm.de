@@ -1,44 +1,44 @@
 <template>
   <span v-if="svgMarkup" class="svg-icon" aria-hidden="true" v-html="svgMarkup"></span>
-  <span
-    v-else-if="fallbackText"
-    class="svg-icon svg-icon--fallback"
-    :style="fallbackStyle"
-    aria-hidden="true"
-  >
+  <span v-else-if="fallbackText" class="svg-icon svg-icon--fallback" :style="fallbackStyle" aria-hidden="true">
     {{ fallbackText }}
   </span>
 </template>
 
-<script setup lang="ts">
-import { computed } from 'vue';
+<script lang="ts">
+import { computed, defineComponent } from 'vue';
 import './SvgIcon.css';
 import { resolveSvgMarkup, toCssDimension } from './SvgIcon.ts';
+import type { SvgIconProps } from './SvgIcon.d';
 
-const props = withDefaults(defineProps<{
-  icon: string;
-  dimension?: number | string;
-  width?: number | string | null;
-  height?: number | string | null;
-  fallbackText?: string;
-}>(), {
-  dimension: 20,
-  width: null,
-  height: null,
-  fallbackText: '',
+export default defineComponent({
+  name: 'SvgIcon',
+  props: {
+    icon: { type: String, required: true },
+    dimension: { type: [Number, String], default: 20, },
+    width: { type: [Number, String], default: null, },
+    height: { type: [Number, String], default: null, },
+    fallbackText: { type: String, default: '', },
+  },
+  setup(props: SvgIconProps) {
+    const resolvedWidth = computed(() => props.width ?? props.dimension ?? 20);
+    const resolvedHeight = computed(() => props.height ?? props.dimension ?? 20);
+
+    const fallbackStyle = computed(() => ({
+      width: toCssDimension(resolvedWidth.value),
+      height: toCssDimension(resolvedHeight.value),
+    }));
+
+    const svgMarkup = computed(() => resolveSvgMarkup(
+      props.icon,
+      resolvedWidth.value,
+      resolvedHeight.value,
+    ));
+
+    return {
+      fallbackStyle,
+      svgMarkup,
+    };
+  },
 });
-
-const resolvedWidth = computed(() => props.width ?? props.dimension);
-const resolvedHeight = computed(() => props.height ?? props.dimension);
-
-const fallbackStyle = computed(() => ({
-  width: toCssDimension(resolvedWidth.value),
-  height: toCssDimension(resolvedHeight.value),
-}));
-
-const svgMarkup = computed(() => resolveSvgMarkup(
-  props.icon,
-  resolvedWidth.value,
-  resolvedHeight.value,
-));
 </script>

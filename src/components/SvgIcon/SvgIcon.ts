@@ -24,7 +24,7 @@ export const toCssDimension = (value: number | string): string => (
 );
 
 export const addDimension = (svg: string, width: number, height: number) => {
-  let result: string = svg
+  const result: string = svg
     .replace(/\swidth="[^"]*"/iu, '')
     .replace(/\sheight="[^"]*"/iu, '');
 
@@ -32,7 +32,7 @@ export const addDimension = (svg: string, width: number, height: number) => {
     /<svg\b([^>]*)>/iu,
     `<svg$1 width="${width}" height="${height}">`,
   );
-}
+};
 
 /**
  * resolve the svg markup for a given icon name and add width and height attributes
@@ -51,5 +51,6 @@ export const resolveSvgMarkup = (
   if (!svg) {
     return '';
   }
+
   return addDimension(svg, Number(width), Number(height));
 };

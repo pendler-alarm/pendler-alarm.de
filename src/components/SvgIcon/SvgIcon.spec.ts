@@ -15,7 +15,6 @@ describe('render SvgIcon', () => {
     });
 
     const svg = wrapper.find('svg');
-
     expect(svg.exists()).toBe(true);
     expect(svg.attributes('width')).toBe('24');
     expect(svg.attributes('height')).toBe('24');
@@ -48,14 +47,14 @@ describe('render SvgIcon', () => {
     expect(wrapper.attributes('style')).toContain('width: 32px;');
     expect(wrapper.attributes('style')).toContain('height: 18px;');
   });
-
 });
 describe('addDimension()', () => {
   const FN = addDimension;
 
   it('adds width and height to an svg string', () => {
-    const svg = `<svg width="10" height="10"><rect width="10" height="10" fill="red"/></svg>`;
+    const inner = `<rect width="10" height="10" fill="red"/>`;
+    const svg = `<svg width="10" height="10">${inner}</svg>`;
     const result = FN(svg, 20, 30);
-    expect(result).toBe('<svg width="20" height="30"><rect width="10" height="10" fill="red"/></svg>');
+    expect(result).toBe(`<svg width="20" height="30">${inner}</svg>`);
   });
 });
