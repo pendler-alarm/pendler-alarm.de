@@ -12,6 +12,7 @@ This is a web app providing a commuter alarm.
 
 ## 📄 important files
 
+- AGENTS.md: project agents and rules
 - constant values: `src/utils/constants/*`
 - components: `src/components/*`
 - views: `src/views/*`
@@ -24,6 +25,7 @@ This is a web app providing a commuter alarm.
 
 - [🛠️ set up project](./docs/howto/setup.md)
 - [🧪 testing setup](./docs/howto/testing.md)
+- [🧩 component structure](./docs/howto/components.md)
 - [📋 release a new version](./docs/howto/release.md)
 - [🖼️ add SVG icons](./docs/howto/add-svg-icons.md)
 - [🧭 add a new view](./docs/howto/add-new-view.md)
