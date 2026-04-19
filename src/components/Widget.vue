@@ -29,7 +29,7 @@
 
 <script lang="ts">
 import ActionButton from './ActionButton.vue';
-import SvgIcon from './SvgIcon.vue';
+import SvgIcon from './SvgIcon/SvgIcon.vue';
 
 export default {
   name: 'Widget',

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import SvgIcon from '@/components/SvgIcon.vue';
+import SvgIcon from '@/components/SvgIcon/SvgIcon.vue';
 import {
   buildStationInfoUrl,
   formatConnectionServiceLabel,

@@ -1,0 +1,23 @@
+.svg-icon {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.svg-icon--fallback {
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 0 8px;
+  background: rgba(15, 23, 42, 0.12);
+  color: currentColor;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.svg-icon :deep(svg) {
+  display: block;
+}

@@ -4,7 +4,7 @@ import type { BahnBookingClass } from '@/components/connection/connection-utils'
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import Message from '@/components/Message.vue';
-import SvgIcon from '@/components/SvgIcon.vue';
+import SvgIcon from '@/components/SvgIcon/SvgIcon.vue';
 import Widget from '@/components/Widget.vue';
 import ConnectionCard from '@/components/connection/ConnectionCard.vue';
 import SharingOptionCard from '@/components/connection/SharingOptionCard.vue';
