@@ -4,11 +4,12 @@ import type { BahnBookingClass } from '@/components/connection/connection-utils'
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import Message from '@/components/Message.vue';
-import SvgIcon from '@/components/SvgIcon.vue';
+import SvgIcon from '@/components/SvgIcon/SvgIcon.vue';
 import Widget from '@/components/Widget.vue';
 import ConnectionCard from '@/components/connection/ConnectionCard.vue';
 import SharingOptionCard from '@/components/connection/SharingOptionCard.vue';
 import GoogleAuthCard from '@/features/auth/google/GoogleAuthCard.vue';
+import NextbikeAuthCard from '@/features/sharing/NextbikeAuthCard.vue';
 import {
   DEFAULT_CONNECTION_BUFFER_MINUTES,
   fetchEventConnection,
@@ -34,6 +35,7 @@ import {
 import {
   findSharingSuggestion,
   getDefaultSharingPreferences,
+  getDistanceMeters,
   type SharingPreferences,
   type SharingProviderId,
 } from '@/features/sharing/sharing-service';
@@ -45,8 +47,17 @@ import {
   type ApiRequestType,
 } from '@/lib/api-metrics';
 import { getCachedConnection, storeConnection } from '@/lib/connection-cache';
+import { recordRouteSample } from '@/lib/route-history';
 import { localStorageStore } from '@/lib/storage';
 import { useGoogleAuthStore } from '@/features/auth/google/store';
+import {
+  clearNextbikeCredentials,
+  loginToNextbike,
+  restoreNextbikeCredentials,
+  storeNextbikeCredentials,
+  type NextbikeAccount,
+  type NextbikeCredentials,
+} from '@/features/sharing/nextbike-auth';
 
 type NotificationUiState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupported';
 
@@ -169,6 +180,9 @@ const sharingShortTripDistanceKm = ref<number>(initialSharingPreferences.shortTr
 const sharingStationSearchRadiusMeters = ref<number>(initialSharingPreferences.stationSearchRadiusMeters);
 const sharingCustomProviderLabel = ref<string>(initialSharingPreferences.customProviderLabel);
 const sharingCustomGbfsUrl = ref<string>(initialSharingPreferences.customGbfsUrl);
+const nextbikeAccount = ref<NextbikeAccount | null>(null);
+const nextbikeAuthError = ref('');
+const isSubmittingNextbikeAuth = ref(false);
 const deutschlandticketEnabled = ref<boolean>(loadStoredDeutschlandticket());
 const bahnBookingClass = ref<BahnBookingClass>(loadStoredBahnBookingClass());
 const bahnTravelerProfileParam = ref<string>(loadStoredBahnTravelerProfile());
@@ -210,6 +224,7 @@ const sharingPreferences = computed<SharingPreferences>(() => ({
   customGbfsUrl: sharingCustomGbfsUrl.value,
 }));
 const isCustomSharingProvider = computed(() => sharingProviderId.value === 'custom');
+const prefersNextbikeRoutes = computed(() => Boolean(nextbikeAccount.value?.loginkey));
 const bahnBookingClassOptions = computed(() => [
   { value: '1', label: t('views.dashboard.events.settings.classFirst') },
   { value: '2', label: t('views.dashboard.events.settings.classSecond') },
@@ -625,6 +640,59 @@ const persistTransferWalkNodes = (): void => {
   localStorageStore.setBoolean(TRANSFER_WALK_NODES_KEY, showTransferWalkNodes.value);
 };
 
+const applyNextbikeAccount = (account: NextbikeAccount | null): void => {
+  nextbikeAccount.value = account;
+
+  if (account) {
+    sharingProviderId.value = 'nextbike';
+  }
+};
+
+const loginWithNextbike = async (credentials: NextbikeCredentials): Promise<void> => {
+  nextbikeAuthError.value = '';
+  isSubmittingNextbikeAuth.value = true;
+
+  try {
+    const account = await loginToNextbike(credentials);
+    const stored = await storeNextbikeCredentials(credentials);
+
+    if (!stored) {
+      nextbikeAuthError.value = t('views.dashboard.events.sharing.nextbike.secureStorageUnavailable');
+    }
+
+    applyNextbikeAccount(account);
+    await refreshSharingSuggestions();
+  } catch (error) {
+    nextbikeAuthError.value = error instanceof Error
+      ? error.message
+      : t('views.dashboard.events.sharing.nextbike.loginFailed');
+  } finally {
+    isSubmittingNextbikeAuth.value = false;
+  }
+};
+
+const logoutFromNextbike = async (): Promise<void> => {
+  clearNextbikeCredentials();
+  applyNextbikeAccount(null);
+  nextbikeAuthError.value = '';
+  await refreshSharingSuggestions();
+};
+
+const restoreNextbikeSession = async (): Promise<void> => {
+  const credentials = await restoreNextbikeCredentials();
+
+  if (!credentials) {
+    return;
+  }
+
+  try {
+    applyNextbikeAccount(await loginToNextbike(credentials));
+  } catch {
+    clearNextbikeCredentials();
+    nextbikeAuthError.value = t('views.dashboard.events.sharing.nextbike.restoreFailed');
+  }
+};
+
 const clearReminderTimers = (): void => {
   if (typeof window === 'undefined') {
     return;
@@ -1031,6 +1099,7 @@ const refreshSharingSuggestions = async (eventIds?: string[]): Promise<void> => 
       currentLocation.value?.coordinates,
       event.locationCoordinates,
       sharingPreferences.value,
+      { prefersNextbike: prefersNextbikeRoutes.value },
     );
 
     updateEvent(event.id, {
@@ -1078,6 +1147,14 @@ const refreshConnections = async (eventIds?: string[]): Promise<void> => {
 
       if (connection) {
         storeConnection(event.id, event.desiredConnectionBufferMinutes, connection, fetchedAt);
+        recordRouteSample(
+          currentLocation.value?.coordinates,
+          event.locationCoordinates,
+          connection.durationMinutes,
+          currentLocation.value?.coordinates && event.locationCoordinates
+            ? getDistanceMeters(currentLocation.value.coordinates, event.locationCoordinates)
+            : null,
+        );
       }
     } finally {
       if (isActiveConnectionRequest(event.id, requestToken)) {
@@ -1119,6 +1196,14 @@ const loadConnections = async (
 
     if (connection) {
       storeConnection(event.id, event.desiredConnectionBufferMinutes, connection, fetchedAt);
+      recordRouteSample(
+        origin?.coordinates,
+        event.locationCoordinates,
+        connection.durationMinutes,
+        origin?.coordinates && event.locationCoordinates
+          ? getDistanceMeters(origin.coordinates, event.locationCoordinates)
+          : null,
+      );
     }
 
     setConnectionLoading(event.id, false);
@@ -1140,6 +1225,7 @@ const loadSharingSuggestions = async (
       origin?.coordinates,
       event.locationCoordinates,
       sharingPreferences.value,
+      { prefersNextbike: prefersNextbikeRoutes.value },
     );
 
     if (sequence !== loadSequence) {
@@ -1232,6 +1318,7 @@ const toggleConnection = (eventId: string): void => {
 onMounted(() => {
   syncStandaloneState();
   syncNotificationState();
+  void restoreNextbikeSession();
 
   if (typeof window !== 'undefined') {
     refreshTimer = window.setInterval(() => {
@@ -1568,6 +1655,15 @@ watch(showTransferWalkNodes, () => {
               </option>
             </select>
           </label>
+          <div v-if="sharingProviderId === 'nextbike'" class="sharing-field sharing-field--wide">
+            <NextbikeAuthCard
+              :account="nextbikeAccount"
+              :is-loading="isSubmittingNextbikeAuth"
+              :error="nextbikeAuthError"
+              @login="loginWithNextbike"
+              @logout="logoutFromNextbike"
+            />
+          </div>
           <label class="sharing-field">
             <span>{{ t('views.dashboard.events.sharing.distanceLabel') }}</span>
             <input
@@ -1650,6 +1746,7 @@ watch(showTransferWalkNodes, () => {
             :last-updated-iso="event.connectionFetchedAt"
             :expanded="isConnectionExpanded(event.id)"
             :sharing-suggestion="event.sharingSuggestion"
+            :sharing-preferences="sharingPreferences"
             :deutschlandticket-enabled="deutschlandticketEnabled"
             :origin-address="currentLocation?.address ?? null"
             :destination-address="event.locationAddress"

@@ -1,0 +1,32 @@
+# Project AGENTS.md
+
+## Component Structure
+- Use a component folder for every standalone component.
+- Keep the main files side by side inside the component folder.
+- Follow this structure for new or refactored components:
+
+```text
+src/components/<ComponentName>/
+  <ComponentName>.vue
+  <ComponentName>.ts
+  <ComponentName>.css
+  <ComponentName>.spec.ts
+```
+
+## Rules
+- Prefer small, standalone components.
+- Keep template, logic, and styles split into dedicated files when the component is more than a trivial inline case.
+- Name the folder and the main files identically.
+- Update imports to the new component path when moving an existing component.
+- Keep tests inside the component folder as `<ComponentName>.spec.ts`.
+
+## Example
+- `SvgIcon` is the reference structure:
+
+```text
+src/components/SvgIcon/
+  SvgIcon.vue
+  SvgIcon.ts
+  SvgIcon.css
+  SvgIcon.spec.ts
+```

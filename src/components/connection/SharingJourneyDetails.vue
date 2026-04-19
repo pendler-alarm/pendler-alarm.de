@@ -6,6 +6,8 @@ import { formatConnectionDuration } from '@/components/connection/connection-uti
 
 const props = defineProps<{
   suggestion: SharingSuggestion;
+  targetLabel?: string;
+  hideDestinationWalk?: boolean;
 }>();
 
 const { t } = useI18n();
@@ -22,6 +24,12 @@ type SharingStep = {
 
 const estimateMinutes = (meters: number, paceMetersPerMinute: number): number =>
   Math.max(1, Math.round(meters / paceMetersPerMinute));
+
+const journeyTargetLabel = computed(() =>
+  props.targetLabel?.trim()
+  || props.suggestion.destinationStation?.name
+  || t('views.dashboard.events.sharing.timeline.destinationOpen'),
+);
 
 const steps = computed<SharingStep[]>(() => {
   const nextSteps: SharingStep[] = [];
@@ -40,16 +48,16 @@ const steps = computed<SharingStep[]>(() => {
     key: 'bike-ride',
     emoji: '🚲',
     title: t('views.dashboard.events.sharing.timeline.ride'),
-    detail: props.suggestion.destinationStation?.name ?? t('views.dashboard.events.sharing.timeline.destinationOpen'),
+    detail: journeyTargetLabel.value,
     durationLabel: formatConnectionDuration(estimateMinutes(props.suggestion.tripDistanceMeters, averageBikeMetersPerMinute)),
   });
 
-  if (props.suggestion.destinationStation) {
+  if (props.suggestion.destinationStation && !props.hideDestinationWalk) {
     nextSteps.push({
       key: 'walk-to-destination',
       emoji: '🚶',
       title: t('views.dashboard.events.sharing.timeline.walkToDestination'),
-      detail: props.suggestion.destinationStation.name,
+      detail: journeyTargetLabel.value,
       durationLabel: formatConnectionDuration(estimateMinutes(props.suggestion.destinationStation.distanceMeters, averageWalkMetersPerMinute)),
     });
   }

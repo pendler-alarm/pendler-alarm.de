@@ -190,6 +190,35 @@ const getEventStartIso = (start?: { date?: string; dateTime?: string }): string 
   return null;
 };
 
+const normalizeAddressLabel = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const parts = value
+    .split(/[,;\n]+/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  const seen = new Set<string>();
+  const unique = parts.filter((part) => {
+    const key = part.toLocaleLowerCase(getLocale());
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+
+  return unique.join(', ');
+};
+
 const resolveEventLocation = async (rawLocation?: string): Promise<EnrichedLocation> => {
   const normalized = rawLocation?.trim();
 
@@ -205,13 +234,13 @@ const resolveEventLocation = async (rawLocation?: string): Promise<EnrichedLocat
     const resolved = await resolveLocation(normalized);
 
     return {
-      address: resolved.address ?? normalized,
+      address: normalizeAddressLabel(resolved.address ?? normalized),
       coordinates: resolved.coordinates,
       coordinatesLabel: resolved.coordinates ? formatCoordinates(resolved.coordinates) : null,
     };
   } catch {
     return {
-      address: normalized,
+      address: normalizeAddressLabel(normalized),
       coordinates: null,
       coordinatesLabel: null,
     };

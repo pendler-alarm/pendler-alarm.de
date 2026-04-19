@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import SvgIcon from '@/components/SvgIcon.vue';
+import SvgIcon from '@/components/SvgIcon/SvgIcon.vue';
+import SharingOptionCard from '@/components/connection/SharingOptionCard.vue';
 import {
   buildStationInfoUrl,
+  formatConnectionDuration,
   formatConnectionServiceLabel,
   formatDelayMinutes,
   formatDistanceMeters,
@@ -13,7 +15,12 @@ import {
   getConnectionProductIcon,
   getStationInfoProviderLabel,
 } from '@/components/connection/connection-utils';
-import { getDistanceMeters } from '@/features/sharing/sharing-service';
+import {
+  findSharingSuggestion,
+  getDistanceMeters,
+  type SharingPreferences,
+  type SharingSuggestion,
+} from '@/features/sharing/sharing-service';
 import type { Coordinates } from '@/features/motis/location-service';
 import type {
   ConnectionDelayCall,
@@ -27,11 +34,13 @@ const props = defineProps<{
   option: ConnectionOption;
   title?: string;
   delayPrediction?: ConnectionDelayPrediction | null;
+  sharingPreferences?: SharingPreferences;
+  showSharingAlternatives?: boolean;
   originAddress?: string | null;
   destinationAddress?: string | null;
 }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const selectedStopIndex = ref<number | null>(null);
 
 type DelayBand = {
@@ -48,8 +57,16 @@ type RouteStopEntry = {
   minuteOffset: number | null;
   arrivalTime: string | null;
   departureTime: string | null;
+  incomingSegmentIndex: number | null;
   incomingSegment: ConnectionSegment | null;
+  outgoingSegmentIndex: number | null;
   outgoingSegment: ConnectionSegment | null;
+};
+
+type WalkSharingCandidate = {
+  segmentId: string;
+  from: Coordinates;
+  to: Coordinates;
 };
 
 const getMinuteOffset = (value: string | null, reference: string | null): number | null => {
@@ -66,45 +83,279 @@ const getMinuteOffset = (value: string | null, reference: string | null): number
   return Math.round(diffMs / 60_000);
 };
 
-const routeStops = computed<RouteStopEntry[]>(() => {
-  if (props.option.segments.length === 0) {
+const baseSegments = computed(() => props.option.segments);
+
+const buildRouteStops = (segments: ConnectionSegment[]): RouteStopEntry[] => {
+  if (segments.length === 0) {
     return [];
   }
 
   const entries: RouteStopEntry[] = [];
-  const [firstSegment] = props.option.segments;
+  const [firstSegment] = segments;
 
   if (firstSegment) {
     entries.push({
-      key: `${firstSegment.id}-start`,
-      kind: 'start',
+      key: `-start`,
+      kind: "start",
       name: firstSegment.fromStop,
       minuteOffset: 0,
       arrivalTime: null,
       departureTime: firstSegment.departureTime,
+      incomingSegmentIndex: null,
       incomingSegment: null,
+      outgoingSegmentIndex: 0,
       outgoingSegment: firstSegment,
     });
   }
 
-  props.option.segments.forEach((segment, index) => {
-    const nextSegment = props.option.segments[index + 1] ?? null;
-    const isLast = index === props.option.segments.length - 1;
+  segments.forEach((segment, index) => {
+    const nextSegment = segments[index + 1] ?? null;
+    const isLast = index === segments.length - 1;
 
     entries.push({
-      key: `${segment.id}-end`,
-      kind: isLast ? 'end' : 'stop',
+      key: `-end`,
+      kind: isLast ? "end" : "stop",
       name: segment.toStop,
       minuteOffset: getMinuteOffset(segment.arrivalIso, props.option.departureIso),
       arrivalTime: segment.arrivalTime,
       departureTime: nextSegment?.departureTime ?? null,
+      incomingSegmentIndex: index,
       incomingSegment: segment,
+      outgoingSegmentIndex: nextSegment ? index + 1 : null,
       outgoingSegment: nextSegment,
     });
   });
 
   return entries;
+};
+
+const baseRouteStops = computed<RouteStopEntry[]>(() => buildRouteStops(baseSegments.value));
+
+const formatSegmentTime = (iso: string | null): string => {
+  if (!iso) {
+    return t("calendar.connection.timeUnknown");
+  }
+
+  return new Intl.DateTimeFormat(locale.value, { timeStyle: 'short' }).format(new Date(iso));
+};
+
+const addMinutes = (iso: string | null, minutes: number | null): string | null => {
+  if (!iso || minutes === null) {
+    return iso;
+  }
+
+  const date = new Date(iso);
+  const next = new Date(date.getTime() + minutes * 60_000);
+  return next.toISOString();
+};
+
+const getSegmentDurationMinutes = (segment: ConnectionSegment): number | null => {
+  if (!segment.departureIso || !segment.arrivalIso) {
+    return null;
+  }
+
+  const diffMs = new Date(segment.arrivalIso).getTime() - new Date(segment.departureIso).getTime();
+
+  if (Number.isNaN(diffMs) || diffMs <= 0) {
+    return null;
+  }
+
+  return Math.round(diffMs / 60_000);
+};
+
+const buildBikeSegments = (segment: ConnectionSegment, suggestion: SharingSuggestion): ConnectionSegment[] => {
+  const originStation = suggestion.originStation;
+
+  if (!originStation) {
+    return [segment];
+  }
+
+  const totalMinutes = getSegmentDurationMinutes(segment);
+  const walkDistance = originStation.distanceMeters;
+  const bikeDistance = suggestion.tripDistanceMeters;
+  const walkMetersPerMinute = 80;
+  const bikeMetersPerMinute = (suggestion.averageSpeedKmh * 1000) / 60;
+  let walkMinutes = Math.max(1, Math.round(walkDistance / walkMetersPerMinute));
+  let bikeMinutes = Math.max(1, Math.round(bikeDistance / bikeMetersPerMinute));
+
+  if (totalMinutes) {
+    const totalDistance = Math.max(1, walkDistance + bikeDistance);
+    walkMinutes = Math.max(1, Math.round(totalMinutes * (walkDistance / totalDistance)));
+    bikeMinutes = Math.max(1, totalMinutes - walkMinutes);
+  }
+
+  const walkArrivalIso = addMinutes(segment.departureIso, walkMinutes);
+  const bikeDepartureIso = walkArrivalIso;
+  const bikeArrivalIso = totalMinutes && segment.arrivalIso
+    ? segment.arrivalIso
+    : addMinutes(bikeDepartureIso, bikeMinutes);
+
+  const walkSegment: ConnectionSegment = {
+    ...segment,
+    id: segment.id + "-walk-to-bike",
+    productType: "walk",
+    productLabel: "Fußweg",
+    lineLabel: "Fußweg",
+    toStop: originStation.name,
+    toStopId: null,
+    toCoordinates: { lat: originStation.lat, lon: originStation.lon },
+    arrivalIso: walkArrivalIso,
+    arrivalTime: formatSegmentTime(walkArrivalIso),
+  };
+
+  const bikeSegment: ConnectionSegment = {
+    ...segment,
+    id: segment.id + "-bike",
+    productType: "bike",
+    productLabel: "Fahrrad",
+    lineLabel: t("views.dashboard.events.sharing.timeline.ride"),
+    fromStop: originStation.name,
+    fromStopId: null,
+    fromCoordinates: { lat: originStation.lat, lon: originStation.lon },
+    departureIso: bikeDepartureIso,
+    departureTime: formatSegmentTime(bikeDepartureIso),
+    arrivalIso: bikeArrivalIso,
+    arrivalTime: formatSegmentTime(bikeArrivalIso),
+  };
+
+  return [walkSegment, bikeSegment];
+};
+
+const getWalkSharingCandidate = (stop: RouteStopEntry): WalkSharingCandidate | null => {
+  const outgoingSegment = stop.outgoingSegment;
+
+  if (outgoingSegment?.productType !== 'walk') {
+    return null;
+  }
+
+  if (!outgoingSegment.fromCoordinates || !outgoingSegment.toCoordinates) {
+    return null;
+  }
+
+  return {
+    segmentId: outgoingSegment.id,
+    from: outgoingSegment.fromCoordinates,
+    to: outgoingSegment.toCoordinates,
+  };
+};
+
+const walkSharingCandidates = computed<WalkSharingCandidate[]>(() =>
+  baseRouteStops.value
+    .map(getWalkSharingCandidate)
+    .filter((candidate): candidate is WalkSharingCandidate => candidate !== null),
+);
+
+const walkSharingBySegmentId = ref<Record<string, SharingSuggestion | null>>({});
+let walkSharingRequestId = 0;
+
+watch(
+  [walkSharingCandidates, () => props.sharingPreferences, () => props.showSharingAlternatives === true],
+  async ([candidates, sharingPreferences, showSharingAlternatives]) => {
+    walkSharingRequestId += 1;
+    const requestId = walkSharingRequestId;
+
+    if (!showSharingAlternatives || !sharingPreferences || sharingPreferences.providerId === 'disabled' || candidates.length === 0) {
+      walkSharingBySegmentId.value = {};
+      return;
+    }
+
+    const nextEntries = await Promise.all(candidates.map(async (candidate) => {
+      const { suggestion } = await findSharingSuggestion(candidate.from, candidate.to, sharingPreferences);
+      return [candidate.segmentId, suggestion] as const;
+    }));
+
+    if (requestId !== walkSharingRequestId) {
+      return;
+    }
+
+    walkSharingBySegmentId.value = Object.fromEntries(nextEntries);
+  },
+  { immediate: true },
+);
+
+const displaySegments = computed<ConnectionSegment[]>(() => {
+  if (!props.showSharingAlternatives) {
+    return baseSegments.value;
+  }
+
+  return baseSegments.value.flatMap((segment) => {
+    if (segment.productType !== "walk") {
+      return [segment];
+    }
+
+    const suggestion = walkSharingBySegmentId.value[segment.id] ?? null;
+
+    if (!suggestion) {
+      return [segment];
+    }
+
+    return buildBikeSegments(segment, suggestion);
+  });
 });
+
+const routeStops = computed<RouteStopEntry[]>(() => buildRouteStops(displaySegments.value));
+
+const getWalkSharingSuggestion = (stop: RouteStopEntry): SharingSuggestion | null =>
+  (stop.outgoingSegment ? walkSharingBySegmentId.value[stop.outgoingSegment.id] : null) ?? null;
+
+const getWalkComparisonSegments = (stop: RouteStopEntry): ConnectionSegment[] => {
+  if (stop.outgoingSegment?.productType !== 'walk') {
+    return [];
+  }
+
+  return [stop.outgoingSegment];
+};
+
+const getWalkComparisonTitle = (stop: RouteStopEntry): string => {
+  const segments = getWalkComparisonSegments(stop);
+
+  return segments.map((segment) => segment.productLabel).join(' + ');
+};
+
+const getWalkComparisonTarget = (stop: RouteStopEntry): string =>
+  stop.outgoingSegment?.toStop ?? stop.name;
+
+const getWalkComparisonViaStop = (stop: RouteStopEntry): string =>
+  stop.outgoingSegment?.toStop ?? stop.name;
+
+const getDurationLabel = (departureIso: string | null, arrivalIso: string | null): string | null => {
+  if (!departureIso || !arrivalIso) {
+    return null;
+  }
+
+  const diffMs = new Date(arrivalIso).getTime() - new Date(departureIso).getTime();
+
+  if (Number.isNaN(diffMs) || diffMs <= 0) {
+    return null;
+  }
+
+  return formatConnectionDuration(Math.round(diffMs / 60_000));
+};
+
+const getWalkComparisonDurationLabel = (stop: RouteStopEntry): string | null => {
+  const firstSegment = stop.outgoingSegment;
+
+  if (!firstSegment) {
+    return null;
+  }
+
+  return getDurationLabel(firstSegment.departureIso, firstSegment.arrivalIso);
+};
+
+const getSharingDurationLabel = (suggestion: SharingSuggestion): string => {
+  const metersPerMinute = (suggestion.averageSpeedKmh * 1000) / 60;
+  const durationMinutes = Math.max(1, Math.round(suggestion.tripDistanceMeters / metersPerMinute));
+  return formatConnectionDuration(durationMinutes);
+};
+
+const getWalkSharingSummary = (suggestion: SharingSuggestion): string =>
+  [
+    getSharingDurationLabel(suggestion),
+    formatDistanceMeters(suggestion.tripDistanceMeters),
+  ].join(" · ");
+
+const isNonTransitSegment = (segment: ConnectionSegment | null | undefined): boolean =>
+  segment?.productType === "walk" || segment?.productType === "bike";
 
 const toggleStop = (index: number): void => {
   selectedStopIndex.value = selectedStopIndex.value === index ? null : index;
@@ -194,7 +445,7 @@ const getTransferLabel = (stop: RouteStopEntry): string | null => {
 };
 
 const getTransferCoordinates = (stop: RouteStopEntry): { from: Coordinates | null; to: Coordinates | null } | null => {
-  const transferWalk = stop.outgoingSegment?.productType === 'walk' ? stop.outgoingSegment : null;
+  const transferWalk = isNonTransitSegment(stop.outgoingSegment) ? stop.outgoingSegment : null;
 
   if (transferWalk) {
     return {
@@ -239,7 +490,7 @@ const getTransferRouteUrl = (stop: RouteStopEntry): string | null => {
 };
 
 const hasStationChange = (stop: RouteStopEntry): boolean => {
-  const transferWalk = stop.outgoingSegment?.productType === 'walk' ? stop.outgoingSegment : null;
+  const transferWalk = isNonTransitSegment(stop.outgoingSegment) ? stop.outgoingSegment : null;
 
   if (transferWalk) {
     const fromKey = transferWalk.fromStopId ?? transferWalk.fromStop.trim().toLowerCase();
@@ -271,33 +522,37 @@ const getStopAddress = (stop: RouteStopEntry): string | null => {
 };
 
 const getTransitIncomingSegment = (index: number): ConnectionSegment | null => {
-  const stop = routeStops.value[index];
+  const stop = baseRouteStops.value[index];
 
   if (!stop) {
     return null;
   }
 
-  if (stop.incomingSegment?.productType !== 'walk') {
+  if (stop.incomingSegment && !isNonTransitSegment(stop.incomingSegment)) {
     return stop.incomingSegment;
   }
 
-  const previousStop = routeStops.value[index - 1] ?? null;
-  return previousStop?.incomingSegment?.productType !== 'walk' ? previousStop?.incomingSegment ?? null : null;
+  const previousStop = baseRouteStops.value[index - 1] ?? null;
+  return previousStop?.incomingSegment && !isNonTransitSegment(previousStop.incomingSegment)
+    ? previousStop.incomingSegment
+    : null;
 };
 
 const getTransitOutgoingSegment = (index: number): ConnectionSegment | null => {
-  const stop = routeStops.value[index];
+  const stop = baseRouteStops.value[index];
 
   if (!stop) {
     return null;
   }
 
-  if (stop.outgoingSegment?.productType !== 'walk') {
+  if (stop.outgoingSegment && !isNonTransitSegment(stop.outgoingSegment)) {
     return stop.outgoingSegment;
   }
 
-  const nextStop = routeStops.value[index + 1] ?? null;
-  return nextStop?.outgoingSegment?.productType !== 'walk' ? nextStop?.outgoingSegment ?? null : null;
+  const nextStop = baseRouteStops.value[index + 1] ?? null;
+  return nextStop?.outgoingSegment && !isNonTransitSegment(nextStop.outgoingSegment)
+    ? nextStop.outgoingSegment
+    : null;
 };
 
 const getTransferAssessment = (index: number): ConnectionTransferAssessment | null => {
@@ -349,7 +604,7 @@ const getPrimaryDelayCall = (index: number): ConnectionDelayCall | null => {
     return null;
   }
 
-  const stop = routeStops.value[index];
+  const stop = baseRouteStops.value[index];
 
   if (!stop) {
     return null;
@@ -367,7 +622,7 @@ const getPrimaryDelayCall = (index: number): ConnectionDelayCall | null => {
 };
 
 const getPredictionProbability = (index: number): number | null => {
-  const stop = routeStops.value[index];
+  const stop = baseRouteStops.value[index];
 
   if (!stop) {
     return null;
@@ -381,7 +636,7 @@ const getPredictionProbability = (index: number): number | null => {
 };
 
 const getPredictionTone = (index: number): 'good' | 'warn' | 'bad' | 'neutral' => {
-  const stop = routeStops.value[index];
+  const stop = baseRouteStops.value[index];
 
   if (!stop) {
     return 'neutral';
@@ -409,7 +664,7 @@ const getPredictionTone = (index: number): 'good' | 'warn' | 'bad' | 'neutral' =
 };
 
 const getStopPredictionLabel = (index: number): string | null => {
-  const stop = routeStops.value[index];
+  const stop = baseRouteStops.value[index];
   const probability = formatProbability(getPredictionProbability(index));
 
   if (!stop || !probability) {
@@ -428,7 +683,7 @@ const getStopPredictionLabel = (index: number): string | null => {
 };
 
 const getStopPredictionTitle = (index: number): string | null => {
-  const stop = routeStops.value[index];
+  const stop = baseRouteStops.value[index];
 
   if (!stop) {
     return null;
@@ -538,11 +793,11 @@ const getDelayBands = (call: ConnectionDelayCall): DelayBand[] => {
 };
 
 const shouldShowIncomingLine = (stop: RouteStopEntry): boolean => !(
-  hasStationChange(stop) && stop.incomingSegment?.productType === 'walk'
+  hasStationChange(stop) && isNonTransitSegment(stop.incomingSegment)
 );
 
 const shouldShowOutgoingLine = (stop: RouteStopEntry): boolean => !(
-  hasStationChange(stop) && stop.outgoingSegment?.productType === 'walk'
+  hasStationChange(stop) && isNonTransitSegment(stop.outgoingSegment)
 );
 
 const getStationLink = (stopName: string, stopId?: string | null): string => buildStationInfoUrl(stopName, stopId);
@@ -563,232 +818,240 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
     </div>
 
     <ol class="connection-route-list">
-      <li
-        v-for="(stop, index) in routeStops"
-        :key="stop.key"
-        class="connection-route-item"
-        :class="{
-          'connection-route-item--past': isPastStop(index),
-          'connection-route-item--selected': isSelectedStop(index),
-        }"
-      >
+      <li v-for="(stop, index) in routeStops" :key="stop.key" class="connection-route-item" :class="{
+        'connection-route-item--past': isPastStop(index),
+        'connection-route-item--selected': isSelectedStop(index),
+      }">
         <div class="connection-route-track" aria-hidden="true">
-          <span
-            class="connection-route-rail connection-route-rail--top"
-            :class="{
-              'connection-route-rail--hidden': index === 0,
-              'connection-route-rail--muted': isPastStop(index),
-            }"
-          ></span>
-          <span
-            class="connection-route-dot"
-            :class="{ 'connection-route-dot--muted': isPastStop(index) }"
-          >
-            <span
-              v-if="getStopMarkerEmoji(stop)"
-              class="connection-route-dot-emoji"
-              aria-hidden="true"
-            >{{ getStopMarkerEmoji(stop) }}</span>
-            <SvgIcon
-              v-else-if="getStopMarkerIcon(stop)"
-              class="connection-route-dot-icon"
-              :icon="getStopMarkerIcon(stop) ?? 'products/BAHN'"
-              :fallback-text="getStopMarkerFallbackLabel(stop)"
-              :width="18"
-              :height="18"
-            />
+          <span class="connection-route-rail connection-route-rail--top" :class="{
+            'connection-route-rail--hidden': index === 0,
+            'connection-route-rail--muted': isPastStop(index),
+          }"></span>
+          <span class="connection-route-dot" :class="{ 'connection-route-dot--muted': isPastStop(index) }">
+            <span v-if="getStopMarkerEmoji(stop)" class="connection-route-dot-emoji" aria-hidden="true">{{
+              getStopMarkerEmoji(stop) }}</span>
+            <SvgIcon v-else-if="getStopMarkerIcon(stop)" class="connection-route-dot-icon"
+              :icon="getStopMarkerIcon(stop) ?? 'products/BAHN'" :fallback-text="getStopMarkerFallbackLabel(stop)"
+              :width="18" :height="18" />
           </span>
-          <span
-            class="connection-route-rail connection-route-rail--bottom"
-            :class="{
-              'connection-route-rail--hidden': index === routeStops.length - 1,
-              'connection-route-rail--muted': selectedStopIndex !== null && index < selectedStopIndex,
-            }"
-          ></span>
+          <span class="connection-route-rail connection-route-rail--bottom" :class="{
+            'connection-route-rail--hidden': index === routeStops.length - 1,
+            'connection-route-rail--muted': selectedStopIndex !== null && index < selectedStopIndex,
+          }"></span>
         </div>
         <div class="connection-route-stop-shell">
-          <button
-            type="button"
-            class="connection-route-stop-trigger"
-            :aria-expanded="isSelectedStop(index)"
-            @click="toggleStop(index)"
-          >
+          <button type="button" class="connection-route-stop-trigger" :aria-expanded="isSelectedStop(index)"
+            @click="toggleStop(index)">
             <span class="connection-route-stop-copy">
               <strong class="connection-route-stop-name">{{ stop.name }}</strong>
               <span class="connection-route-stop-meta">{{ getStopMeta(stop) }}</span>
             </span>
             <span class="connection-route-stop-side">
-              <span
-                v-if="getStopPredictionLabel(index)"
-                class="connection-route-prediction-button"
+              <span v-if="getStopPredictionLabel(index)" class="connection-route-prediction-button"
                 :class="`connection-route-prediction-button--${getPredictionTone(index)}`"
-                @click.stop="toggleStop(index)"
-              >
+                @click.stop="toggleStop(index)">
                 {{ getStopPredictionLabel(index) }}
               </span>
               <span v-if="getOffsetLabel(stop)" class="connection-route-offset">{{ getOffsetLabel(stop) }}</span>
-              <SvgIcon
-                :icon="isSelectedStop(index) ? 'material/expand_less' : 'material/expand_more'"
-                :dimension="20"
-                aria-hidden="true"
-              />
+              <SvgIcon :icon="isSelectedStop(index) ? 'material/expand_less' : 'material/expand_more'" :dimension="20"
+                aria-hidden="true" />
             </span>
           </button>
 
+          <div v-if="showSharingAlternatives && getWalkComparisonSegments(stop).length > 0"
+            class="connection-route-option-preview">
+            <article class="connection-route-option-card connection-route-option-card--transit">
+              <span class="connection-route-option-pill">
+                {{ getWalkComparisonTitle(stop) }}
+              </span>
+              <strong>{{ t('views.dashboard.events.connection.directTo', { stop: getWalkComparisonTarget(stop) })
+              }}</strong>
+              <span>{{ t('views.dashboard.events.connection.viaStop', { stop: getWalkComparisonViaStop(stop) })
+              }}</span>
+              <span>
+                {{
+                  [
+                    getWalkComparisonDurationLabel(stop),
+                    formatConnectionServiceLabel(getWalkComparisonSegments(stop)[1] ?? stop.outgoingSegment!),
+                  ].filter(Boolean).join(' · ')
+                }}
+              </span>
+            </article>
+
+            <article class="connection-route-option-card connection-route-option-card--bike">
+              <span class="connection-route-option-pill">
+                🚲 {{ getWalkSharingSuggestion(stop)?.providerLabel ?? t('views.dashboard.events.sharing.title') }}
+              </span>
+              <strong>{{ t('views.dashboard.events.connection.directTo', { stop: getWalkComparisonTarget(stop) })
+              }}</strong>
+              <span v-if="getWalkSharingSuggestion(stop)">{{ getWalkSharingSummary(getWalkSharingSuggestion(stop)!)
+              }}</span>
+              <span v-else class="connection-route-option-muted">{{
+                t('views.dashboard.events.sharing.previewUnavailable') }}</span>
+            </article>
+          </div>
+
           <div v-if="isSelectedStop(index)" class="connection-route-stop-details">
             <div v-if="getStopAddress(stop)" class="connection-route-address-row">
-              <span class="connection-route-detail-label">{{ t('views.dashboard.events.connection.addressLabel') }}</span>
+              <span class="connection-route-detail-label">{{ t('views.dashboard.events.connection.addressLabel')
+              }}</span>
               <span class="connection-route-detail-value">{{ getStopAddress(stop) }}</span>
             </div>
 
             <div class="connection-route-time-grid">
               <div v-if="stop.arrivalTime" class="connection-route-detail-row">
-                <span class="connection-route-detail-label">{{ t('views.dashboard.events.connection.arrivalLabel') }}</span>
+                <span class="connection-route-detail-label">{{ t('views.dashboard.events.connection.arrivalLabel')
+                }}</span>
                 <span class="connection-route-detail-value">{{ stop.arrivalTime }}</span>
               </div>
               <div v-if="stop.departureTime" class="connection-route-detail-row">
-                <span class="connection-route-detail-label">{{ t('views.dashboard.events.connection.departureLabel') }}</span>
+                <span class="connection-route-detail-label">{{ t('views.dashboard.events.connection.departureLabel')
+                }}</span>
                 <span class="connection-route-detail-value">{{ stop.departureTime }}</span>
               </div>
             </div>
 
             <div v-if="stop.incomingSegment && shouldShowIncomingLine(stop)" class="connection-route-lines">
-              <span
-                v-if="getConnectionProductEmoji(stop.incomingSegment.productType)"
-                class="connection-route-line-emoji"
-                aria-hidden="true"
-              >{{ getConnectionProductEmoji(stop.incomingSegment.productType) }}</span>
-              <SvgIcon
-                v-else
-                class="connection-route-line-icon"
+              <span v-if="getConnectionProductEmoji(stop.incomingSegment.productType)"
+                class="connection-route-line-emoji" aria-hidden="true">{{
+                  getConnectionProductEmoji(stop.incomingSegment.productType) }}</span>
+              <SvgIcon v-else class="connection-route-line-icon"
                 :icon="getConnectionProductIcon(stop.incomingSegment.productType) ?? 'products/BAHN'"
-                :fallback-text="getConnectionProductFallbackLabel(stop.incomingSegment.productType)"
-                :width="48"
-                :height="22"
-              />
+                :fallback-text="getConnectionProductFallbackLabel(stop.incomingSegment.productType)" :width="48"
+                :height="22" />
               <strong>{{ formatConnectionServiceLabel(stop.incomingSegment) }}</strong>
-              <span>{{ t('views.dashboard.events.connection.arrivalLabel') }} {{ stop.incomingSegment.arrivalTime }}</span>
+              <span>{{ t('views.dashboard.events.connection.arrivalLabel') }} {{ stop.incomingSegment.arrivalTime
+              }}</span>
             </div>
 
             <div v-if="stop.outgoingSegment && shouldShowOutgoingLine(stop)" class="connection-route-lines">
-              <span
-                v-if="getConnectionProductEmoji(stop.outgoingSegment.productType)"
-                class="connection-route-line-emoji"
-                aria-hidden="true"
-              >{{ getConnectionProductEmoji(stop.outgoingSegment.productType) }}</span>
-              <SvgIcon
-                v-else
-                class="connection-route-line-icon"
+              <span v-if="getConnectionProductEmoji(stop.outgoingSegment.productType)"
+                class="connection-route-line-emoji" aria-hidden="true">{{
+                  getConnectionProductEmoji(stop.outgoingSegment.productType) }}</span>
+              <SvgIcon v-else class="connection-route-line-icon"
                 :icon="getConnectionProductIcon(stop.outgoingSegment.productType) ?? 'products/BAHN'"
-                :fallback-text="getConnectionProductFallbackLabel(stop.outgoingSegment.productType)"
-                :width="48"
-                :height="22"
-              />
+                :fallback-text="getConnectionProductFallbackLabel(stop.outgoingSegment.productType)" :width="48"
+                :height="22" />
               <strong>{{ formatConnectionServiceLabel(stop.outgoingSegment) }}</strong>
-              <span>{{ t('views.dashboard.events.connection.directionLabel', { stop: stop.outgoingSegment.toStop }) }}</span>
+              <span>{{ t('views.dashboard.events.connection.directionLabel', { stop: stop.outgoingSegment.toStop })
+              }}</span>
             </div>
 
-            <div v-if="getTransferLabel(stop)" class="connection-route-transfer-card" :class="`connection-route-transfer-card--${getTransferTone(getTransferAssessment(index)?.successProbability ?? null)}`">
-              <p class="connection-route-transfer">
-                {{ getTransferLabel(stop) }}
-              </p>
-              <p v-if="hasStationChange(stop)" class="connection-route-transfer-summary">
-                {{ t('views.dashboard.events.connection.transferWalkSummary', {
-                  from: stop.incomingSegment?.toStop ?? stop.name,
-                  to: stop.outgoingSegment?.productType === 'walk' ? stop.outgoingSegment.toStop : stop.outgoingSegment?.fromStop ?? stop.name,
-                }) }}
-              </p>
-              <div class="connection-route-transfer-extras">
-                <span v-if="hasStationChange(stop)" class="connection-route-transfer-chip">
-                  🚶 {{ t('views.dashboard.events.connection.transferStationChange') }}
-                </span>
-                <span v-if="getTransferDistanceLabel(stop)" class="connection-route-transfer-chip">
-                  📏 {{ t('views.dashboard.events.connection.transferDistance', { value: getTransferDistanceLabel(stop) }) }}
-                </span>
-                <span
-                  v-if="getTransferFeasibilityLabel(index)"
-                  class="connection-route-transfer-chip"
-                  :class="`connection-route-transfer-chip--${getTransferTone(getTransferAssessment(index)?.successProbability ?? null)}`"
-                >
-                  {{ getTransferFeasibilityLabel(index) }}
-                </span>
-                <span v-if="formatProbability(getTransferAssessment(index)?.missedProbability ?? null)" class="connection-route-transfer-chip">
-                  {{ t('views.dashboard.events.connection.transferMissedShort', { value: formatProbability(getTransferAssessment(index)?.missedProbability ?? null) }) }}
-                </span>
-                <a
-                  v-if="getTransferRouteUrl(stop)"
-                  class="connection-route-station-link"
-                  :href="getTransferRouteUrl(stop) ?? undefined"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  {{ t('views.dashboard.events.connection.debugTransferRouteLink') }}
-                </a>
-                <a
-                  v-if="stop.incomingSegment"
-                  class="connection-route-station-link"
-                  :href="getStationLink(stop.incomingSegment.toStop, stop.incomingSegment.toStopId)"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  {{ t('views.dashboard.events.connection.stationInfoLink', {
-                    stop: stop.incomingSegment.toStop,
-                    provider: getStationProvider(stop.incomingSegment.toStop, stop.incomingSegment.toStopId),
+            <div v-if="getTransferLabel(stop) || (showSharingAlternatives && getWalkSharingSuggestion(stop))"
+              class="connection-route-comparison-grid">
+              <div v-if="getTransferLabel(stop)" class="connection-route-transfer-card"
+                :class="`connection-route-transfer-card--${getTransferTone(getTransferAssessment(index)?.successProbability ?? null)}`">
+                <p class="connection-route-transfer">
+                  {{ getTransferLabel(stop) }}
+                </p>
+                <p v-if="hasStationChange(stop)" class="connection-route-transfer-summary">
+                  {{ t('views.dashboard.events.connection.transferWalkSummary', {
+                    from: stop.incomingSegment?.toStop ?? stop.name,
+                    to: !stop.outgoingSegment ? stop.name : isNonTransitSegment(stop.outgoingSegment)
+                      ? stop.outgoingSegment.toStop
+                      : stop.outgoingSegment.fromStop,
                   }) }}
-                </a>
-                <a
-                  v-if="stop.outgoingSegment && stop.outgoingSegment.productType === 'walk'"
-                  class="connection-route-station-link"
-                  :href="getStationLink(stop.outgoingSegment.toStop, stop.outgoingSegment.toStopId)"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  {{ t('views.dashboard.events.connection.stationInfoLink', {
-                    stop: stop.outgoingSegment.toStop,
-                    provider: getStationProvider(stop.outgoingSegment.toStop, stop.outgoingSegment.toStopId),
-                  }) }}
-                </a>
+                </p>
+                <div class="connection-route-transfer-extras">
+                  <span v-if="hasStationChange(stop)" class="connection-route-transfer-chip">
+                    🚶 {{ t('views.dashboard.events.connection.transferStationChange') }}
+                  </span>
+                  <span v-if="getTransferDistanceLabel(stop)" class="connection-route-transfer-chip">
+                    📏 {{ t('views.dashboard.events.connection.transferDistance', {
+                      value:
+                        getTransferDistanceLabel(stop)
+                    }) }}
+                  </span>
+                  <span v-if="getTransferFeasibilityLabel(index)" class="connection-route-transfer-chip"
+                    :class="`connection-route-transfer-chip--${getTransferTone(getTransferAssessment(index)?.successProbability ?? null)}`">
+                    {{ getTransferFeasibilityLabel(index) }}
+                  </span>
+                  <span v-if="formatProbability(getTransferAssessment(index)?.missedProbability ?? null)"
+                    class="connection-route-transfer-chip">
+                    {{ t('views.dashboard.events.connection.transferMissedShort', {
+                      value:
+                        formatProbability(getTransferAssessment(index)?.missedProbability ?? null)
+                    }) }}
+                  </span>
+                  <a v-if="getTransferRouteUrl(stop)" class="connection-route-station-link"
+                    :href="getTransferRouteUrl(stop) ?? undefined" target="_blank" rel="noreferrer noopener">
+                    {{ t('views.dashboard.events.connection.debugTransferRouteLink') }}
+                  </a>
+                  <a v-if="stop.incomingSegment" class="connection-route-station-link"
+                    :href="getStationLink(stop.incomingSegment.toStop, stop.incomingSegment.toStopId)" target="_blank"
+                    rel="noreferrer noopener">
+                    {{ t('views.dashboard.events.connection.stationInfoLink', {
+                      stop: stop.incomingSegment.toStop,
+                      provider: getStationProvider(stop.incomingSegment.toStop, stop.incomingSegment.toStopId),
+                    }) }}
+                  </a>
+                  <a v-if="stop.outgoingSegment && stop.outgoingSegment.productType === 'walk'"
+                    class="connection-route-station-link"
+                    :href="getStationLink(stop.outgoingSegment.toStop, stop.outgoingSegment.toStopId)" target="_blank"
+                    rel="noreferrer noopener">
+                    {{ t('views.dashboard.events.connection.stationInfoLink', {
+                      stop: stop.outgoingSegment.toStop,
+                      provider: getStationProvider(stop.outgoingSegment.toStop, stop.outgoingSegment.toStopId),
+                    }) }}
+                  </a>
+                </div>
               </div>
+
+              <SharingOptionCard v-if="showSharingAlternatives && getWalkSharingSuggestion(stop)"
+                class="connection-route-sharing-card" :suggestion="getWalkSharingSuggestion(stop)!"
+                :target-label="getWalkComparisonTarget(stop)" :hide-destination-walk="true" :compact="true" />
             </div>
 
-            <section v-if="getRelatedDelayCalls(index).length > 0 || getStopPredictionValue(index)" class="connection-route-delay-history">
-              <strong class="connection-route-delay-title">{{ t('views.dashboard.events.connection.delayStopHistoryTitle') }}</strong>
+            <section v-if="getRelatedDelayCalls(index).length > 0 || getStopPredictionValue(index)"
+              class="connection-route-delay-history">
+              <strong class="connection-route-delay-title">{{
+                t('views.dashboard.events.connection.delayStopHistoryTitle') }}</strong>
               <p v-if="delayPrediction?.historyNote" class="connection-route-delay-note">
                 {{ delayPrediction.historyNote }}
               </p>
               <div class="connection-route-time-grid">
-                <div
-                  v-if="getStopPredictionValue(index)"
-                  class="connection-route-detail-row"
-                  :class="`connection-route-detail-row--${getPredictionTone(index)}`"
-                >
+                <div v-if="getStopPredictionValue(index)" class="connection-route-detail-row"
+                  :class="`connection-route-detail-row--${getPredictionTone(index)}`">
                   <span class="connection-route-detail-label">{{ getStopPredictionTitle(index) }}</span>
                   <span class="connection-route-detail-value">{{ getStopPredictionValue(index) }}</span>
                 </div>
               </div>
               <div class="connection-route-delay-calls">
-                <article
-                  v-for="call in getRelatedDelayCalls(index)"
-                  :key="call.key"
-                  class="connection-route-delay-call"
-                  :class="`connection-route-delay-call--${getDelayTone(call.expectedDelayMinutes)}`"
-                >
-                  <strong>{{ call.stopName }} · {{ call.eventType === 'departure' ? t('views.dashboard.events.connection.departureLabel') : t('views.dashboard.events.connection.arrivalLabel') }}</strong>
-                  <span>{{ t('views.dashboard.events.connection.predictedDelayShort', { value: formatDelayMinutes(call.expectedDelayMinutes) ?? t('calendar.connection.timeUnknown') }) }}</span>
-                  <span v-if="formatDelayMinutes(call.p50DelayMinutes)">{{ t('views.dashboard.events.connection.p50DelayShort', { value: formatDelayMinutes(call.p50DelayMinutes) }) }}</span>
-                  <span v-if="formatDelayMinutes(call.p90DelayMinutes)">{{ t('views.dashboard.events.connection.p90DelayShort', { value: formatDelayMinutes(call.p90DelayMinutes) }) }}</span>
-                  <span v-if="formatProbability(call.probabilityLate)">{{ t('views.dashboard.events.connection.probabilityLateShort', { value: formatProbability(call.probabilityLate) }) }}</span>
+                <article v-for="call in getRelatedDelayCalls(index)" :key="call.key" class="connection-route-delay-call"
+                  :class="`connection-route-delay-call--${getDelayTone(call.expectedDelayMinutes)}`">
+                  <strong>{{ call.stopName }} · {{ call.eventType === 'departure' ?
+                    t('views.dashboard.events.connection.departureLabel') :
+                    t('views.dashboard.events.connection.arrivalLabel') }}</strong>
+                  <span>{{ t('views.dashboard.events.connection.predictedDelayShort', {
+                    value:
+                      formatDelayMinutes(call.expectedDelayMinutes) ?? t('calendar.connection.timeUnknown')
+                  }) }}</span>
+                  <span v-if="formatDelayMinutes(call.p50DelayMinutes)">{{
+                    t('views.dashboard.events.connection.p50DelayShort', {
+                      value:
+                        formatDelayMinutes(call.p50DelayMinutes)
+                    }) }}</span>
+                  <span v-if="formatDelayMinutes(call.p90DelayMinutes)">{{
+                    t('views.dashboard.events.connection.p90DelayShort', {
+                      value:
+                        formatDelayMinutes(call.p90DelayMinutes)
+                    }) }}</span>
+                  <span v-if="formatProbability(call.probabilityLate)">{{
+                    t('views.dashboard.events.connection.probabilityLateShort', {
+                      value:
+                        formatProbability(call.probabilityLate)
+                    }) }}</span>
                   <div v-if="call.distribution.length > 0" class="connection-route-delay-scale">
-                    <div
-                      v-for="band in getDelayBands(call)"
-                      :key="`${call.key}-${band.key}`"
-                      class="connection-route-delay-band"
-                    >
+                    <div v-for="band in getDelayBands(call)" :key="`${call.key}-${band.key}`"
+                      class="connection-route-delay-band">
                       <span class="connection-route-delay-band-label">{{ band.label }}</span>
                       <span class="connection-route-delay-band-track">
-                        <span class="connection-route-delay-band-fill" :class="`connection-route-delay-band-fill--${band.tone}`" :style="{ width: `${Math.round(band.probability * 100)}%` }"></span>
+                        <span class="connection-route-delay-band-fill"
+                          :class="`connection-route-delay-band-fill--${band.tone}`"
+                          :style="{ width: `${Math.round(band.probability * 100)}%` }"></span>
                       </span>
-                      <span class="connection-route-delay-band-value">{{ formatProbability(band.probability) ?? formatProbability(0) }}</span>
+                      <span class="connection-route-delay-band-value">{{ formatProbability(band.probability) ??
+                        formatProbability(0) }}</span>
                     </div>
                   </div>
                 </article>
@@ -914,6 +1177,62 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
   color: #27272a;
   text-align: left;
   cursor: pointer;
+}
+
+.connection-route-sharing-card {
+  min-width: 0;
+}
+
+.connection-route-option-preview,
+.connection-route-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 2px 0 4px;
+}
+
+.connection-route-option-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.72);
+  color: #334155;
+}
+
+.connection-route-option-card strong,
+.connection-route-option-card span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.connection-route-option-card--transit {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.connection-route-option-card--bike {
+  background: linear-gradient(180deg, rgba(236, 253, 245, 0.94), rgba(239, 246, 255, 0.94));
+  border-color: rgba(16, 185, 129, 0.24);
+}
+
+.connection-route-option-pill {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.connection-route-option-muted {
+  color: #64748b;
+  font-size: 0.78rem;
 }
 
 .connection-route-stop-copy,
@@ -1203,6 +1522,7 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
 }
 
 @media (max-width: 720px) {
+
   .connection-route-overview,
   .connection-route-stop-trigger {
     flex-direction: column;
@@ -1212,6 +1532,11 @@ const getStationProvider = (stopName: string, stopId?: string | null): string =>
   .connection-route-stop-side {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .connection-route-option-preview,
+  .connection-route-comparison-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

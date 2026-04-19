@@ -17,7 +17,8 @@ export type ConnectionProductType =
   | 'ic'
   | 'flight'
   | 'ferry'
-  | 'walk';
+  | 'walk'
+  | 'bike';
 
 export type ConnectionSegment = {
   id: string;

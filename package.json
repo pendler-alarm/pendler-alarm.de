@@ -27,7 +27,8 @@
     "prebuild": "npm run prepare:release-meta",
     "pretype-check": "npm run prepare:release-meta",
     "check:i18n": "TS_NODE_PROJECT=tsconfig.scripts.json node --no-warnings --loader ts-node/esm scripts/check-i18n.ts",
-    "lint:i18n": "npm run check:i18n"
+    "lint:i18n": "npm run check:i18n",
+    "test": "vitest run"
   },
   "dependencies": {
     "pinia": "^3.0.4",
@@ -37,6 +38,7 @@
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
+    "@types/jest": "^30.0.0",
     "@types/jsdom": "^28.0.0",
     "@types/node": "^24.12.0",
     "@vitejs/plugin-vue": "^6.0.4",
@@ -49,11 +51,14 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-oxlint": "~1.51.0",
     "eslint-plugin-vue": "~10.8.0",
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^29.6.2",
     "jiti": "^2.6.1",
     "jsdom": "^28.1.0",
     "npm-run-all2": "^8.0.4",
     "oxlint": "~1.51.0",
     "prettier": "3.8.1",
+    "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
     "typescript": "~5.9.3",
     "vite": "^7.3.1",

@@ -26,8 +26,10 @@ This is a web app providing a commuter alarm.
 - [📋 release a new version](./docs/howto/release.md)
 - [🖼️ add SVG icons](./docs/howto/add-svg-icons.md)
 - [🧭 add a new view](./docs/howto/add-new-view.md)
+- [🧩 component structure](./docs/howto/component-structure.md)
 - [🌍 work with i18n](./docs/howto/i18n.md)
 - [🔐 set up Google API credentials](./docs/howto/google-api.md)
+- [🧪 test setup](./docs/howto/test-setup.md)
 
 ## used ressources/tools
 

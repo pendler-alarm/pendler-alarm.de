@@ -6,8 +6,10 @@ export default mergeConfig(
   viteConfig,
   defineConfig({
     test: {
+      pool: 'threads', // Switch to 'threads' or 'vmThreads'
       environment: 'jsdom',
-      exclude: [...configDefaults.exclude, 'e2e/**'],
+      globals: true,
+      exclude: [...configDefaults.exclude, 'e2e/**', 'src/components/__tests__/HelloWorld.spec.ts'],
       root: fileURLToPath(new URL('./', import.meta.url)),
     },
   }),

@@ -175,7 +175,7 @@ const buildLikelyConnection = (
   calls: ConnectionDelayCall[],
 ): ConnectionSummary => {
   const delayedSegments = connection.segments.map((segment) => {
-    if (segment.productType === 'walk') {
+    if (segment.productType === 'walk' || segment.productType === 'bike') {
       return segment;
     }
 
@@ -213,7 +213,7 @@ const buildTransferAssessments = (
   connection: ConnectionSummary,
   calls: ConnectionDelayCall[],
 ): ConnectionTransferAssessment[] => {
-  const transitSegments = connection.segments.filter((segment) => segment.productType !== 'walk');
+  const transitSegments = connection.segments.filter((segment) => segment.productType !== 'walk' && segment.productType !== 'bike');
   const callMap = new Map(calls.map((call) => [call.key, call]));
 
   return transitSegments.slice(0, -1).flatMap((segment, index) => {
@@ -334,7 +334,7 @@ export const fetchDelayPrediction = async (
 
   const rows = normalizePredictionRows(delayPayload.predictor_response?.predictions);
   const offset = typeof delayPayload.predictor_response?.offset === 'number' ? delayPayload.predictor_response.offset : 0;
-  const transitSegments = baseConnection.segments.filter((segment) => segment.productType !== 'walk');
+  const transitSegments = baseConnection.segments.filter((segment) => segment.productType !== 'walk' && segment.productType !== 'bike');
   const calls: ConnectionDelayCall[] = [];
 
   transitSegments.forEach((segment, index) => {

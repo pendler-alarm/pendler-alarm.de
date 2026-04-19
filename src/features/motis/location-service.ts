@@ -60,6 +60,24 @@ const dedupeParts = (parts: Array<string | undefined>): string | null => {
   return normalized.length > 0 ? normalized.join(', ') : null;
 };
 
+const dedupeTextValues = (values: Array<string | undefined>): string[] => {
+  const seen = new Set<string>();
+
+  return values
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value))
+    .filter((value) => {
+      const key = value.toLocaleLowerCase(getLocale());
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+};
+
 const formatAddress = (match?: MotisMatch, fallback?: string | null): string | null => {
   if (!match) {
     return fallback?.trim() || null;
@@ -71,9 +89,7 @@ const formatAddress = (match?: MotisMatch, fallback?: string | null): string | n
     .trim();
 
   const areaNames = Array.isArray(match.areas)
-    ? match.areas
-      .map((area) => area.name?.trim())
-      .filter((area): area is string => Boolean(area))
+    ? dedupeTextValues(match.areas.map((area) => area.name))
     : [];
 
   const locality = [match.zip?.trim(), areaNames.join(', ').trim()]

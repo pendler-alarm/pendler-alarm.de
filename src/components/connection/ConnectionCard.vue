@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import SvgIcon from '@/components/SvgIcon.vue';
+import SvgIcon from '@/components/SvgIcon/SvgIcon.vue';
 import SharingOptionCard from '@/components/connection/SharingOptionCard.vue';
 import ConnectionRouteDetails from '@/components/connection/ConnectionRouteDetails.vue';
 import type {
@@ -18,7 +18,7 @@ import {
   getConnectionProductIcon,
   requiresTrainTicketBooking,
 } from '@/components/connection/connection-utils';
-import type { SharingSuggestion } from '@/features/sharing/sharing-service';
+import type { SharingPreferences, SharingSuggestion } from '@/features/sharing/sharing-service';
 
 const props = defineProps<{
   connection: ConnectionSummary;
@@ -27,6 +27,7 @@ const props = defineProps<{
   lastUpdatedIso?: string | null;
   expanded?: boolean;
   sharingSuggestion?: SharingSuggestion | null;
+  sharingPreferences?: SharingPreferences;
   deutschlandticketEnabled?: boolean;
   bahnBookingClass?: '1' | '2';
   bahnTravelerProfileParam?: string;
@@ -141,6 +142,16 @@ const routeRiskLabel = computed(() => {
   return `${Math.round(riskyTransfer.value.successProbability * 100)} %`;
 });
 
+const bikeAvailabilityLabel = computed(() => {
+  const available = props.sharingSuggestion?.originStation?.bikesAvailable;
+
+  if (typeof available !== 'number' || available <= 0) {
+    return null;
+  }
+
+  return t('views.dashboard.events.sharing.bikesAvailable', { count: available });
+});
+
 const showRaisedBufferHint = computed(() =>
   props.connection.effectiveBufferMinutes > props.connection.requestedBufferMinutes,
 );
@@ -208,6 +219,9 @@ const toggleExpanded = (): void => {
 
         <span v-if="connection.delayPrediction" class="connection-status connection-status--prediction">
           {{ t('views.dashboard.events.connection.delayAvailableBadge') }}
+        </span>
+        <span v-if="bikeAvailabilityLabel" class="connection-status connection-status--bike">
+          {{ bikeAvailabilityLabel }}
         </span>
         <button type="button" class="connection-toggle" :aria-expanded="isExpanded" @click="toggleExpanded">
           <SvgIcon :icon="isExpanded ? 'material/expand_less' : 'material/expand_more'" :dimension="18"
@@ -343,12 +357,54 @@ const toggleExpanded = (): void => {
         }) }}
       </p>
 
-      <ConnectionRouteDetails v-if="hasSegments" :option="routeOption"
-        :delay-prediction="routeDelayPrediction"
-        :origin-address="originAddress"
-        :destination-address="destinationAddress"
-        :title="showRouteToggle ? (selectedRoute === 'plan' ? t('views.dashboard.events.connection.delayRoutePlan') : t('views.dashboard.events.connection.delayRouteAlternative')) : t('views.dashboard.events.connection.route')" />
+      <div class="connection-accordions">
+        <details class="connection-accordion" open>
+          <summary class="connection-accordion-summary">
+            {{ t('views.dashboard.events.connection.routeWithoutBike') }}
+          </summary>
+          <div class="connection-accordion-body">
+            <ConnectionRouteDetails
+              v-if="hasSegments"
+              :option="routeOption"
+              :delay-prediction="routeDelayPrediction"
+              :sharing-preferences="sharingPreferences"
+              :show-sharing-alternatives="false"
+              :origin-address="originAddress"
+              :destination-address="destinationAddress"
+              :title="showRouteToggle ? (selectedRoute === 'plan' ? t('views.dashboard.events.connection.delayRoutePlan') : t('views.dashboard.events.connection.delayRouteAlternative')) : t('views.dashboard.events.connection.route')"
+            />
+          </div>
+        </details>
 
+        <details class="connection-accordion" open>
+          <summary class="connection-accordion-summary">
+            {{ t('views.dashboard.events.connection.routeWithBike') }}
+          </summary>
+          <div class="connection-accordion-body">
+            <ConnectionRouteDetails
+              v-if="hasSegments"
+              :option="routeOption"
+              :delay-prediction="routeDelayPrediction"
+              :sharing-preferences="sharingPreferences"
+              :show-sharing-alternatives="true"
+              :origin-address="originAddress"
+              :destination-address="destinationAddress"
+              :title="showRouteToggle ? (selectedRoute === 'plan' ? t('views.dashboard.events.connection.delayRoutePlan') : t('views.dashboard.events.connection.delayRouteAlternative')) : t('views.dashboard.events.connection.route')"
+            />
+
+            <SharingOptionCard
+              v-else-if="sharingSuggestion"
+              class="connection-sharing-inline"
+              :suggestion="sharingSuggestion"
+              :compact="false"
+            />
+
+            <p v-else class="connection-bike-unavailable">
+              {{ t('views.dashboard.events.connection.routeWithBikeUnavailable') }}
+            </p>
+          </div>
+        </details>
+      </div>
 
       <div v-if="connection.alternatives.length > 0" class="connection-alternatives">
         <strong class="connection-alternatives-title">
@@ -397,14 +453,15 @@ const toggleExpanded = (): void => {
                 </span>
               </div>
 
-              <ConnectionRouteDetails :option="alternative" :title="t('views.dashboard.events.connection.route')" />
+              <ConnectionRouteDetails
+                :option="alternative"
+                :sharing-preferences="sharingPreferences"
+                :title="t('views.dashboard.events.connection.route')"
+              />
             </div>
           </li>
         </ul>
       </div>
-
-      <SharingOptionCard v-if="sharingSuggestion" class="connection-sharing-inline" :suggestion="sharingSuggestion"
-        :compact="true" />
 
       <p v-if="formattedUpdatedAt" class="connection-updated">
         {{ t('views.dashboard.events.connection.updatedAt', { time: formattedUpdatedAt }) }}
@@ -482,6 +539,12 @@ const toggleExpanded = (): void => {
   color: #1d4ed8;
   background: rgba(219, 234, 254, 0.96);
   border: 1px solid rgba(96, 165, 250, 0.28);
+}
+
+.connection-status--bike {
+  color: #065f46;
+  background: rgba(209, 250, 229, 0.96);
+  border: 1px solid rgba(16, 185, 129, 0.28);
 }
 
 .connection-toggle {
@@ -690,6 +753,69 @@ const toggleExpanded = (): void => {
 
 .connection-facts--alternative {
   margin-bottom: 2px;
+}
+
+.connection-accordions {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.connection-accordion {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 10px 12px;
+}
+
+.connection-accordion[open] {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.connection-accordion-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.connection-accordion-summary::-webkit-details-marker {
+  display: none;
+}
+
+.connection-accordion-summary::before {
+  content: '▾';
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.connection-accordion[open] .connection-accordion-summary::before {
+  content: '▴';
+}
+
+.connection-accordion-body {
+  display: grid;
+  gap: 12px;
+  padding-top: 10px;
+}
+
+.connection-sharing-inline {
+  min-width: 0;
+}
+
+.connection-bike-unavailable {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+@media (max-width: 900px) {
+  .connection-accordions {
+    grid-template-columns: 1fr;
+  }
 }
 
 .connection-route-switch {

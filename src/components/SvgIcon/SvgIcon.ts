@@ -1,18 +1,7 @@
-<template>
-  <span v-if="svgMarkup" class="svg-icon" aria-hidden="true" v-html="svgMarkup"></span>
-  <span
-    v-else-if="fallbackText"
-    class="svg-icon svg-icon--fallback"
-    :style="fallbackStyle"
-    aria-hidden="true"
-  >
-    {{ fallbackText }}
-  </span>
-</template>
+import { defineComponent } from 'vue';
 
-<script lang="ts">
-const SVG_PATH = '../assets/svg';
-const svgFiles = import.meta.glob('../assets/svg/**/*.svg', {
+const SVG_PATH = '../../assets/svg';
+const svgFiles = import.meta.glob('../../assets/svg/**/*.svg', {
   eager: true,
   import: 'default',
   query: '?raw',
@@ -20,7 +9,7 @@ const svgFiles = import.meta.glob('../assets/svg/**/*.svg', {
 
 const normalizeIconName = (icon: string) =>
   icon
-    .replace(/^\/+/ , '')
+    .replace(/^\/+/, '')
     .replace(/^\.\//, '')
     .replace(/\.svg$/i, '');
 
@@ -36,11 +25,10 @@ const resolveSvg = (icon: string): string => {
   return match?.[1] ?? '';
 };
 
-const toCssDimension = (value: number | string) =>
+const toCssDimension = (value: number | string): string =>
   typeof value === 'number' ? `${value}px` : value;
 
-
-export default {
+export default defineComponent({
   name: 'SvgIcon',
   props: {
     icon: {
@@ -65,19 +53,19 @@ export default {
     },
   },
   computed: {
-    resolvedWidth() {
+    resolvedWidth(): number | string {
       return this.width ?? this.dimension;
     },
-    resolvedHeight() {
+    resolvedHeight(): number | string {
       return this.height ?? this.dimension;
     },
-    fallbackStyle() {
+    fallbackStyle(): { width: string; height: string } {
       return {
         width: toCssDimension(this.resolvedWidth),
         height: toCssDimension(this.resolvedHeight),
       };
     },
-    svgMarkup() {
+    svgMarkup(): string {
       const svg = resolveSvg(this.icon);
 
       if (!svg) {
@@ -94,31 +82,4 @@ export default {
       );
     },
   },
-};
-</script>
-
-<style scoped>
-.svg-icon {
-  display: inline-flex;
-  line-height: 0;
-}
-
-.svg-icon--fallback {
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border-radius: 999px;
-  padding: 0 8px;
-  background: rgba(15, 23, 42, 0.12);
-  color: currentColor;
-  font-size: 0.68rem;
-  font-weight: 700;
-  line-height: 1;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.svg-icon :deep(svg) {
-  display: block;
-}
-</style>
+});

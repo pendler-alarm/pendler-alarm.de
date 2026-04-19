@@ -257,7 +257,7 @@ const formatBahnDateTime = (isoString: string): string | null => {
 };
 
 export const getTransitSegments = (connection: ConnectionOption): ConnectionSegment[] =>
-  connection.segments.filter((segment) => segment.productType !== 'walk');
+  connection.segments.filter((segment) => segment.productType !== 'walk' && segment.productType !== 'bike');
 
 const isDeutschlandticketCoveredSegment = (segment: ConnectionSegment): boolean =>
   deutschlandticketModes.includes(segment.productType);

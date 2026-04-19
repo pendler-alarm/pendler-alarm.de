@@ -1,6 +1,7 @@
  
 import { translate } from '@/i18n';
 import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
+import { getFallbackBikeSpeedKmh, getRouteProfile } from '@/lib/route-history';
 import type { Coordinates } from '@/features/motis/location-service';
 
 export type SharingProviderId = 'disabled' | 'nextbike' | 'custom';
@@ -32,6 +33,9 @@ export type SharingSuggestion = {
   stationSearchRadiusMeters: number;
   originStation: SharingStation | null;
   destinationStation: SharingStation | null;
+  averageSpeedKmh: number;
+  recurringRouteSampleCount: number;
+  isPreferred: boolean;
 };
 
 type SharingFetchResult = {
@@ -90,6 +94,10 @@ type GbfsStationStatusResponse = {
   data?: {
     stations?: GbfsStationStatus[];
   };
+};
+
+type SharingSuggestionContext = {
+  prefersNextbike?: boolean;
 };
 
 const DEFAULT_SHORT_TRIP_DISTANCE_KM = 5;
@@ -396,6 +404,7 @@ export const findSharingSuggestion = async (
   origin: Coordinates | null | undefined,
   destination: Coordinates | null | undefined,
   preferences?: Partial<SharingPreferences>,
+  context: SharingSuggestionContext = {},
 ): Promise<SharingFetchResult> => {
   const normalizedPreferences = normalizePreferences(preferences);
 
@@ -468,6 +477,16 @@ export const findSharingSuggestion = async (
       };
     }
 
+    const routeProfile = getRouteProfile(origin, destination);
+    const averageSpeedKmh = routeProfile?.isRecurring
+      ? routeProfile.averageSpeedKmh
+      : getFallbackBikeSpeedKmh();
+    const isPreferred = Boolean(
+      context.prefersNextbike
+      && normalizedPreferences.providerId === 'nextbike'
+      && (originStation?.bikesAvailable ?? 0) > 0,
+    );
+
     return {
       suggestion: {
         providerId: normalizedPreferences.providerId,
@@ -477,6 +496,9 @@ export const findSharingSuggestion = async (
         stationSearchRadiusMeters: normalizedPreferences.stationSearchRadiusMeters,
         originStation,
         destinationStation,
+        averageSpeedKmh,
+        recurringRouteSampleCount: routeProfile?.samples ?? 0,
+        isPreferred,
       },
       error: null,
     };
