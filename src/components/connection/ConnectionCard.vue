@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import ProductIcon from '@/components/ProductIcon/ProductIcon.vue';
 import SvgIcon from '@/components/SvgIcon/SvgIcon.vue';
 import SharingOptionCard from '@/components/connection/SharingOptionCard.vue';
-import ConnectionRouteDetails from '@/components/connection/ConnectionRouteDetails.vue';
+import ConnectionRouteDetails from '@/components/connection/ConnectionRouteDetails/ConnectionRouteDetails.vue';
 import type {
   ConnectionOption,
   ConnectionSummary,
@@ -13,9 +14,6 @@ import {
   canUseDeutschlandticket,
   formatConnectionDuration,
   getConnectionLeadLabel,
-  getConnectionProductEmoji,
-  getConnectionProductFallbackLabel,
-  getConnectionProductIcon,
   requiresTrainTicketBooking,
 } from '@/components/connection/connection-utils';
 import type { SharingSuggestion } from '@/features/sharing/sharing-service';
@@ -229,11 +227,8 @@ const toggleExpanded = (): void => {
         <div class="connection-badges">
           <template v-if="hasSegments">
             <span v-for="segment in connection.segments" :key="segment.id" class="connection-badge">
-              <span v-if="getConnectionProductEmoji(segment.productType)" class="connection-badge-emoji"
-                aria-hidden="true">{{ getConnectionProductEmoji(segment.productType) }}</span>
-              <SvgIcon v-else class="connection-badge-icon"
-                :icon="getConnectionProductIcon(segment.productType) ?? 'products/BAHN'"
-                :fallback-text="getConnectionProductFallbackLabel(segment.productType)" :width="44" :height="20" />
+              <ProductIcon class="connection-badge-product" :product-type="segment.productType" :width="44"
+                :height="20" :emoji-width="24" :emoji-font-size="'0.95rem'" />
               <span class="connection-badge-label">{{ segment.lineLabel }}</span>
             </span>
           </template>
@@ -547,16 +542,8 @@ const toggleExpanded = (): void => {
   font-weight: 700;
 }
 
-.connection-badge-icon {
+.connection-badge-product {
   flex: 0 0 auto;
-}
-
-.connection-badge-emoji {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  font-size: 0.95rem;
 }
 
 .connection-badge-label {

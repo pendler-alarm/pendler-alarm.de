@@ -11,7 +11,7 @@ const EXTENSIONS = [
 export const normalizeFilePath = (filePath: string): string => {
     let result: string = filePath
         .replace(/^\.\//u, '')
-        .replace(/^\/+/u, '')
+        .replace(/^\/+/u, '');
     for (const ext of EXTENSIONS) {
         if (result.endsWith(ext)) {
             result = result.slice(0, -ext.length);

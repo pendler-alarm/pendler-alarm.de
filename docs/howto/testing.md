@@ -85,3 +85,44 @@ Important:
 - `jsdom` as the default can noticeably slow down Wallaby runs
 - for component-local Vue tests, the current default is acceptable for now
 - later optimizations should only happen once the test structure is closer to the components
+
+
+# typical issues
+
+## describe or it are not recognized
+- Wallaby: check that `globals: true` is set in the test configuration (see `vitest.config.ts`)
+- tslint: check that test-file pattern is defined as includes in the test configuration (see `vitest.config.ts`, `tsconfig.vitest.json`, `eslint.config.ts`), for example `src/**/*.spec.ts` and `src/**/*.test.ts`
+- define in `env.d.ts`an include called `/// <reference types="vitest/globals" />` to make the globals available in the editor
+
+## ReferenceError: document is not defined
+* include `// @vitest-environment jsdom` at the top of the test file to use the `jsdom` environment for that test file ( avoid type of `//@` instead of `// @`)
+
+## TypeError: Invalid value used as weak map key
+- for dynamic types you need to use PropType
+
+```
+props: {
+  text: { type: String as PropType<string | null>, default: null },
+}
+```
+
+
+## SyntaxError: Need to install with app.use function
+- define if needed the i18n-plugin in globals
+```
+ const wrapper = mount(Chip, {
+            props: {
+                text: '5 min',
+                type: 'connection',
+            },
+            global: {
+                plugins: [
+                    createI18n({
+                        legacy: false,
+                        locale: 'de',
+                        messages: {},
+                    }),
+                ],
+            },
+        });
+```

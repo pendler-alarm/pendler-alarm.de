@@ -15,6 +15,7 @@
 ```text
 src/components/<ComponentName>/
   <ComponentName>.vue
+  <ComponentName>.d.ts
   <ComponentName>.ts
   <ComponentName>.css
   <ComponentName>.spec.ts
@@ -33,6 +34,7 @@ src/components/<ComponentName>/
 ```text
 src/components/SvgIcon/
   SvgIcon.vue
+  SvgIcon.d.ts
   SvgIcon.ts
   SvgIcon.css
   SvgIcon.spec.ts

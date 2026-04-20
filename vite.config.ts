@@ -11,6 +11,7 @@ import vueJsx from '@vitejs/plugin-vue-jsx';
 export default defineConfig({
   plugins: [vue(), vueJsx()/*, vueDevTools()*/],
   test: {
+    // globals: true,
     // pool: isWallaby ? 'threads' : 'forks',
   },
   resolve: {
