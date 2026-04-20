@@ -2,6 +2,8 @@
 import Chip from '@/components/Chip/Chip.vue';
 import ProductIcon from '@/components/ProductIcon/ProductIcon.vue';
 import SvgIcon from '@/components/SvgIcon/SvgIcon.vue';
+import Item from '@/components/Item/Item.vue';
+import Train from '@/components/Train/Train.vue';
 import { useConnectionRouteDetail } from './ConnectionRouteDetail.ts';
 import type { ConnectionRouteDetailProps } from './ConnectionRouteDetail.d';
 
@@ -42,82 +44,58 @@ const {
 </script>
 
 <template>
-  <div class="connection-route-stop-details">
+  <div class="connection-route-stop-details" :set="stop = props.stop">
     <div v-if="stopAddress" class="connection-route-address-row">
-      <span class="connection-route-detail-label">{{ t('views.dashboard.events.connection.addressLabel') }}</span>
-      <span class="connection-route-detail-value">{{ stopAddress }}</span>
+      <Item label="addressLabel" :label-style="{ bold: true }" type="connection" />
+      <Item :value="stopAddress" type="connection" />
     </div>
 
     <div class="connection-route-time-grid">
-      <div v-if="props.stop.arrivalTime" class="connection-route-detail-row">
-        <span class="connection-route-detail-label">{{ t('views.dashboard.events.connection.arrivalLabel') }}</span>
-        <span class="connection-route-detail-value">{{ props.stop.arrivalTime }}</span>
-      </div>
-      <div v-if="props.stop.departureTime" class="connection-route-detail-row">
-        <span class="connection-route-detail-label">{{ t('views.dashboard.events.connection.departureLabel') }}</span>
-        <span class="connection-route-detail-value">{{ props.stop.departureTime }}</span>
-      </div>
+      <Chip type="gray" v-if="stop.arrivalTime">
+        <template #custom>
+          <Item label="arrivalLabel" :label-style="{ bold: true }" :value="stop.arrivalTime" type="connection" />
+        </template>
+      </Chip>
+      <Chip type="gray" v-if="stop.departureTime">
+        <template #custom>
+          <Item label="departureLabel" :label-style="{ bold: true }" :value="stop.departureTime" type="connection" />
+        </template>
+      </Chip>
     </div>
 
     <div v-if="props.stop.incomingSegment && shouldShowIncomingLine" class="connection-route-lines">
-      <ProductIcon class="connection-route-line-product" :segment="props.stop.incomingSegment" />
-      <strong>{{ formatConnectionServiceLabel(props.stop.incomingSegment) }}</strong>
-      <span>{{ t('views.dashboard.events.connection.arrivalLabel') }} {{ props.stop.incomingSegment.arrivalTime
-      }}</span>
+      <Train :segment="props.stop.incomingSegment" />
+      <Item label="arrivalLabel" :value="props.stop.incomingSegment.arrivalTime" type="connection" />
     </div>
 
     <div v-if="props.stop.outgoingSegment && shouldShowOutgoingLine" class="connection-route-lines">
-      <ProductIcon class="connection-route-line-product" :segment="props.stop.outgoingSegment" />
-      <strong>{{ formatConnectionServiceLabel(props.stop.outgoingSegment) }}</strong>
-      <span>{{ t('views.dashboard.events.connection.directionLabel', { stop: props.stop.outgoingSegment.toStop })
-      }}</span>
+      <Train :segment="props.stop.outgoingSegment" />
     </div>
 
     <div v-if="transferLabel" class="connection-route-transfer-card"
       :class="`connection-route-transfer-card--${transferTone}`">
       <p class="connection-route-transfer">{{ transferLabel }}</p>
       <p v-if="hasStationChange" class="connection-route-transfer-summary">
-        {{ t('views.dashboard.events.connection.transferWalkSummary', {
+        x{{ t('views.dashboard.events.connection.transferWalkSummary', {
           from: props.stop.incomingSegment?.toStop ?? props.stop.name,
           to: props.stop.outgoingSegment?.productType === 'walk' ? props.stop.outgoingSegment.toStop :
             props.stop.outgoingSegment?.fromStop ?? props.stop.name,
         }) }}
       </p>
       <div class="connection-route-transfer-extras">
-        <Chip
-          :text="hasStationChange ? t('views.dashboard.events.connection.transferStationChange') : undefined"
-          emoji="🚶"
-          type="connection"
-        />
-        <Chip
-          :text="transferDistanceLabel
-            ? t('views.dashboard.events.connection.transferDistance', { value: transferDistanceLabel })
-            : undefined"
-          emoji="📏"
-          type="connection"
-        />
-        <Chip
-          :text="transferFeasibilityLabel ?? undefined"
-          :type="transferTone === 'neutral' ? 'connection' : `connection-${transferTone}`"
-        />
-        <Chip
-          :text="missedProbabilityLabel
-            ? t('views.dashboard.events.connection.transferMissedShort', { value: missedProbabilityLabel })
-            : undefined"
-          type="connection"
-        />
-        <Chip
-          :link="transferRouteLink ?? undefined"
-          type="connection-link"
-        />
-        <Chip
-          :link="incomingStationLink ?? undefined"
-          type="connection-link"
-        />
-        <Chip
-          :link="outgoingWalkStationLink ?? undefined"
-          type="connection-link"
-        />
+        <Chip :text="hasStationChange ? t('views.dashboard.events.connection.transferStationChange') : undefined"
+          emoji="🚶" type="connection" />
+        <Chip :text="transferDistanceLabel
+          ? t('views.dashboard.events.connection.transferDistance', { value: transferDistanceLabel })
+          : undefined" emoji="📏" type="connection" />
+        <Chip :text="transferFeasibilityLabel ?? undefined"
+          :type="transferTone === 'neutral' ? 'connection' : `connection-${transferTone}`" />
+        <Chip :text="missedProbabilityLabel
+          ? t('views.dashboard.events.connection.transferMissedShort', { value: missedProbabilityLabel })
+          : undefined" type="connection" />
+        <Chip :link="transferRouteLink ?? undefined" type="connection-link" />
+        <Chip :link="incomingStationLink ?? undefined" type="connection-link" />
+        <Chip :link="outgoingWalkStationLink ?? undefined" type="connection-link" />
       </div>
     </div>
 
@@ -220,7 +198,8 @@ const {
           :key="site.id ?? `${props.stop.key}-${site.name}-${site.lat}-${site.lon}`"
           class="connection-route-mobility-item">
           <strong>{{ site.name }}</strong>
-          <p>{{ t('views.dashboard.events.connection.mobility.distance', { value: getParkingDistanceLabel(site) }) }}</p>
+          <p>{{ t('views.dashboard.events.connection.mobility.distance', { value: getParkingDistanceLabel(site) }) }}
+          </p>
           <p v-if="site.capacity !== null">{{ t('views.dashboard.events.connection.mobility.capacity', {
             value:
               site.capacity

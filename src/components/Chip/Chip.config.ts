@@ -9,6 +9,9 @@ export const CHIP_TYPE_CONFIG: CHIP_CONFIG = {
     good: {
         className: 'chip--good',
     },
+    blank: {
+        className: '',
+    },
     warn: {
         className: 'chip--warn',
     },
@@ -18,6 +21,9 @@ export const CHIP_TYPE_CONFIG: CHIP_CONFIG = {
     link: {
         className: 'chip--link',
     },
+    gray: {
+        className: 'chip--gray',
+    },
     connection: {
         className: 'chip--default',
         i18nPrefix: 'views.dashboard.events.connection',
@@ -25,6 +31,9 @@ export const CHIP_TYPE_CONFIG: CHIP_CONFIG = {
     'connection-good': {
         className: 'chip--good',
         i18nPrefix: 'views.dashboard.events.connection',
+    },
+    'connection-offset': {
+        className: 'connection-route-offset',
     },
     'connection-warn': {
         className: 'chip--warn',

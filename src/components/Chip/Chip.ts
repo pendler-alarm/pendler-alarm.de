@@ -43,7 +43,7 @@ export const getChipTypeConfig = (type: ChipType): ChipTypeConfig => {
 };
 export const getType = (value: ChipType | undefined): ChipType => {
   return value && value in CHIP_TYPE_CONFIG ? value : 'default';
-}
+};
 export const getLabel = (type: ChipType, props: ChipProps): string => {
   if (props.text) {
     return props.text;

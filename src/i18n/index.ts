@@ -62,3 +62,4 @@ export const getLocale = (): AppLocale => i18n.global.locale.value as AppLocale;
 
 export const translate = (key: string, values?: Record<string, unknown>): string =>
   i18n.global.t(key, values ?? {}) as string;
+

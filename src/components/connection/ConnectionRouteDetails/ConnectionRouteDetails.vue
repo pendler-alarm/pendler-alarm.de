@@ -4,8 +4,12 @@ import SvgIcon from '@/components/SvgIcon/SvgIcon.vue';
 import ConnectionRouteDetail from '@/components/connection/ConnectionRouteDetail/ConnectionRouteDetail.vue';
 import { useConnectionRouteDetails } from './ConnectionRouteDetails.ts';
 import type { ConnectionRouteDetailsProps } from './ConnectionRouteDetails.d';
+import Chip from '@/components/Chip/Chip.vue';
+import Item from '@/components/Item/Item.vue';
+
 
 const props = defineProps<ConnectionRouteDetailsProps>();
+
 
 const {
   getOffsetLabel,
@@ -27,12 +31,12 @@ const {
 
 <template>
   <div v-if="routeStops.length > 0" class="connection-route">
-    <div class="connection-route-overview">
+    <div class="connection-route-overview" :set="option = props.option">
       <strong class="connection-route-title">{{ props.title ?? t('views.dashboard.events.connection.route')
-        }}</strong>
+      }}</strong>
       <div class="connection-route-overview-times">
-        <span>{{ t('views.dashboard.events.connection.departureLabel') }} {{ props.option.departureTime }}</span>
-        <span>{{ t('views.dashboard.events.connection.arrivalLabel') }} {{ props.option.arrivalTime }}</span>
+        <Item label="departureLabel" :value="option.departureTime" type="connection" />
+        <Item label="arrivalLabel" :value="option.arrivalTime" type="connection" />
       </div>
     </div>
 
@@ -67,7 +71,8 @@ const {
                 @click.stop="toggleStop(index)">
                 {{ getStopPredictionLabel(index) }}
               </span>
-              <span v-if="getOffsetLabel(stop)" class="connection-route-offset">{{ getOffsetLabel(stop) }}</span>
+              <Chip :text="getOffsetLabel(stop)" class="connection-route-offset" type="blank" />
+
               <SvgIcon :icon="isSelectedStop(index) ? 'material/expand_less' : 'material/expand_more'" :dimension="20"
                 aria-hidden="true" />
             </span>

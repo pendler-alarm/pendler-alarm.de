@@ -6,6 +6,8 @@ import { mount } from '@vue/test-utils';
 import { createI18n } from 'vue-i18n';
 import { setLocale } from '@/i18n';
 
+const href = 'https://example.com';
+
 describe('render Chip.vue', () => {
     const global = {
         plugins: [
@@ -55,13 +57,41 @@ describe('render Chip.vue', () => {
         expect(wrapper.find('.chip__emoji').exists()).toBe(true);
         expect(span.attributes('class')).toBe('chip chip--default');
     });
+    it('renders custom slot content', () => {
+        const wrapper = mount(Chip, {
+            props: {
+                type: 'connection',
+            },
+            slots: {
+                custom: '<strong>Custom content</strong>',
+            },
+            global,
+        });
+
+        expect(wrapper.find('.chip').exists()).toBe(true);
+        expect(wrapper.find('strong').text()).toBe('Custom content');
+        expect(wrapper.find('div.chip').exists()).toBe(true);
+    });
+    it('does not render for empty custom slot content', () => {
+        const wrapper = mount(Chip, {
+            props: {
+                type: 'connection',
+            },
+            slots: {
+                custom: '   ',
+            },
+            global,
+        });
+
+        expect(wrapper.find('.chip').exists()).toBe(false);
+    });
     it('renders link chip', () => {
         const wrapper = mount(Chip, {
             props: {
                 text: 'Google',
                 type: 'link',
                 link: {
-                    href: 'https://www.pendleralarm.de',
+                    href,
                 },
             },
             global,
@@ -69,7 +99,7 @@ describe('render Chip.vue', () => {
         expect(wrapper.text()).toContain('Google');
         const link = wrapper.find('a.chip');
         expect(link.exists()).toBe(true);
-        expect(link.attributes('href')).toBe('https://www.pendleralarm.de');
+        expect(link.attributes('href')).toBe(href);
         expect(link.attributes('target')).toBe('_blank');
         expect(link.attributes('rel')).toBe('noreferrer noopener');
         expect(link.attributes('class')).toBe('chip chip--link chip--interactive');
@@ -107,7 +137,7 @@ describe('getConfigClassName()', () => {
 });
 describe('getLinkAttributes()', () => {
     const FN = getLinkAttributes;
-    const href = 'https://example.com';
+
     it('returns the correct attributes for a valid link', () => {
         const result = FN({ href, target: '_self', rel: 'nofollow' });
         expect(result).toEqual({
@@ -185,7 +215,7 @@ describe('getLabel()', () => {
         expect(result).toBe('Hello');
     });
     it('returns the link text if text prop does not exist', () => {
-        const result = FN('default', { link: { href: 'https://example.com', text: 'Example' } });
+        const result = FN('default', { link: { href, text: 'Example' } });
         expect(result).toBe('Example');
     });
     it('returns the resolved label from the config if labelKey exists', () => {

@@ -43,3 +43,8 @@
 .chip__emoji {
   line-height: 1;
 }
+
+
+.chip--gray {
+  background: rgba(15, 23, 42, 0.06);
+}
