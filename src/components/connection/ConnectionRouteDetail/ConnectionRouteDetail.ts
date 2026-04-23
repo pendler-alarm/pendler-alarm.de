@@ -39,7 +39,7 @@ type ParkingCategory = {
   sites: MobilityHubParkingSite[];
 };
 
-const normalizeComparableText = (value: string): string => value
+export const normalizeComparableText = (value: string): string => value
   .toLowerCase()
   .replaceAll(/[^\p{L}\p{N}]+/gu, '')
   .trim();
@@ -79,7 +79,7 @@ const formatDistanceKilometers = (distanceKilometers: number): string => (
   `${distanceKilometers < 10 ? distanceKilometers.toFixed(2) : distanceKilometers.toFixed(1)} km`
 );
 
-const normalizeOperatorLabel = (operator: string | null, fallback: string): string => {
+export const normalizeOperatorLabel = (operator: string | null, fallback: string): string => {
   if (!operator) {
     return fallback;
   }
@@ -88,7 +88,6 @@ const normalizeOperatorLabel = (operator: string | null, fallback: string): stri
     .replaceAll(/[_-]+/gu, ' ')
     .replaceAll(/\s+/gu, ' ')
     .trim();
-
   return normalized
     .split(' ')
     .map((token) => token ? `${token.charAt(0).toUpperCase()}${token.slice(1)}` : token)
@@ -357,12 +356,12 @@ export const useConnectionRouteDetail = (props: ConnectionRouteDetailProps) => {
 
   const getPurposeLabel = (purpose: string | null): string => {
     switch (purpose?.toUpperCase()) {
-    case 'BIKE':
-      return t('views.dashboard.events.connection.mobility.purposeBike');
-    case 'CAR':
-      return t('views.dashboard.events.connection.mobility.purposeCar');
-    default:
-      return t('views.dashboard.events.connection.mobility.purposeUnknown');
+      case 'BIKE':
+        return t('views.dashboard.events.connection.mobility.purposeBike');
+      case 'CAR':
+        return t('views.dashboard.events.connection.mobility.purposeCar');
+      default:
+        return t('views.dashboard.events.connection.mobility.purposeUnknown');
     }
   };
 
