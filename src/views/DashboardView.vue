@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { BahnBookingClass } from '@/components/connection/connection-utils';
 import { useI18n } from 'vue-i18n';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import Message from '@/components/Message.vue';
 import SvgIcon from '@/components/SvgIcon/SvgIcon.vue';
 import Widget from '@/components/Widget.vue';
@@ -44,6 +44,7 @@ import {
   type ApiRequestStatus,
   type ApiRequestType,
 } from '@/lib/api-metrics';
+import { getCachedCalendarEvents, storeCachedCalendarEvents } from '@/lib/calendar-events-cache';
 import { getCachedConnection, storeConnection } from '@/lib/connection-cache';
 import { localStorageStore } from '@/lib/storage';
 import { useGoogleAuthStore } from '@/features/auth/google/store';
@@ -131,6 +132,7 @@ const getReminderLeadTimeMs = (): number => {
 };
 
 const { t, locale } = useI18n();
+const route = useRoute();
 const router = useRouter();
 const googleAuthStore = useGoogleAuthStore();
 const initialOriginPreferences = loadStoredOriginPreferences();
@@ -155,6 +157,7 @@ const loadingConnectionsById = ref<Record<string, boolean>>({});
 const connectionRequestTokens = ref<Record<string, number>>({});
 const expandedConnections = ref<Set<string>>(new Set());
 const apiMetrics = ref(getApiMetrics());
+const shouldUseCachedEvents = computed(() => route.query.cachedEvents === '1');
 const lastConnectionRefreshAt = ref<string | null>(null);
 const debugNotificationFeedback = ref<{
   variant: 'success' | 'error' | 'warning';
@@ -1186,6 +1189,7 @@ const loadEvents = async (): Promise<void> => {
     }
 
     events.value = nextEvents;
+    storeCachedCalendarEvents(nextEvents);
     isLoadingEvents.value = false;
     updateApiMetrics();
 
@@ -1203,6 +1207,7 @@ const loadEvents = async (): Promise<void> => {
       loadConnections(nextEvents, origin, sequence),
       loadSharingSuggestions(nextEvents, origin, sequence),
     ]);
+    storeCachedCalendarEvents(events.value);
   } catch (error) {
     if (sequence !== loadSequence) {
       return;
@@ -1212,6 +1217,20 @@ const loadEvents = async (): Promise<void> => {
     eventsError.value = error instanceof Error ? error.message : t('views.dashboard.events.errorFallback');
     isLoadingEvents.value = false;
   }
+};
+
+const loadCachedEvents = (): void => {
+  const cachedEvents = getCachedCalendarEvents().map(applyStoredConnectionBuffer);
+
+  loadSequence += 1;
+  isLoadingEvents.value = false;
+  eventsError.value = '';
+  loadingConnectionsById.value = {};
+  connectionRequestTokens.value = {};
+  expandedConnections.value = new Set();
+  currentLocation.value = null;
+  currentLocationError.value = '';
+  events.value = cachedEvents;
 };
 
 const isConnectionExpanded = (eventId: string): boolean => expandedConnections.value.has(eventId);
@@ -1268,6 +1287,11 @@ watch(
   () => googleAuthStore.isAuthenticated,
   (isAuthenticated) => {
     if (!isAuthenticated) {
+      if (shouldUseCachedEvents.value) {
+        loadCachedEvents();
+        return;
+      }
+
       loadSequence += 1;
       router.replace({ name: 'home' });
       resetDashboardState();

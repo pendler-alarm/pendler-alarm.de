@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 import Widget from '@/components/Widget.vue';
 import ActionButton from '@/components/ActionButton.vue';
 import Message from '@/components/Message.vue';
+import { hasCachedCalendarEvents } from '@/lib/calendar-events-cache';
 import { useGoogleAuthStore } from './store';
 
 type AuthCardMode = 'login' | 'status';
@@ -13,8 +15,10 @@ const props = withDefaults(defineProps<{ mode?: AuthCardMode }>(), {
 });
 
 const { t } = useI18n();
+const router = useRouter();
 const googleAuthStore = useGoogleAuthStore();
 const isLoginMode = computed(() => props.mode === 'login');
+const hasCachedEvents = computed(() => hasCachedCalendarEvents());
 const statusLabel = computed(() => {
   if (!googleAuthStore.isConfigured) {
     return t('auth.google.status.notConfigured');
@@ -42,6 +46,9 @@ const loginLabel = computed(() =>
   googleAuthStore.status === 'loading'
     ? t('auth.google.action.opening')
     : t('auth.google.action.connect'));
+const loadCachedEvents = (): void => {
+  void router.push({ name: 'dashboard', query: { cachedEvents: '1' } });
+};
 </script>
 
 <template>
@@ -61,6 +68,9 @@ const loginLabel = computed(() =>
           <ActionButton class="button-primary" :disabled="googleAuthStore.status === 'loading'"
             @click="googleAuthStore.signIn">
             <template #label>{{ loginLabel }}</template>
+          </ActionButton>
+          <ActionButton v-if="hasCachedEvents" class="button-secondary" @click="loadCachedEvents">
+            <template #label>{{ t('auth.google.action.loadCachedEvents') }}</template>
           </ActionButton>
         </div>
 

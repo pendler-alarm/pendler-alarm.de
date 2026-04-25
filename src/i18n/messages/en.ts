@@ -49,6 +49,7 @@ export const en = {
       action: {
         opening: 'Opening Google OAuth',
         connect: 'Connect Google Calendar',
+        loadCachedEvents: 'Use latest events',
         logout: 'Sign out',
       },
       message: {

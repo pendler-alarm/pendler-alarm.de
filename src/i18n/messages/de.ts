@@ -49,6 +49,7 @@ export const de = {
       action: {
         opening: 'Google OAuth wird geoffnet',
         connect: 'Mit Google Calendar verbinden',
+        loadCachedEvents: 'Letzte Termine nutzen',
         logout: 'Abmelden',
       },
       message: {

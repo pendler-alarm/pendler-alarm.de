@@ -7,6 +7,7 @@ export type Coordinates = {
   lat: number;
   lon: number;
 };
+export type $Coordinates = Coordinates | null | undefined;
 
 export type ResolvedLocation = {
   address: string | null;

@@ -16,7 +16,7 @@ import type {
   ConnectionMobilityHubGroup,
   MobilityHubParkingSite,
   MobilityHubSharingStation,
-} from '@/features/motis/routing-service';
+} from '@/features/motis/routing-service.d';
 import type { ConnectionRouteDetailProps, DetailTone } from './ConnectionRouteDetail.d';
 
 type DelayBand = {

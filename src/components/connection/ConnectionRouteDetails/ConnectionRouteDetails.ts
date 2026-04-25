@@ -1,11 +1,6 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { formatProbability } from '@/components/connection/connection-utils';
-import type {
-  ConnectionDelayCall,
-  ConnectionSegment,
-  ConnectionTransferAssessment,
-} from '@/features/motis/routing-service';
+import { useConnectionPrediction } from '@/components/connection/prediction/prediction';
 import type { ConnectionRouteDetailsProps } from './ConnectionRouteDetails.d';
 import type { RouteStopEntry } from '../ConnectionRouteDetail/ConnectionRouteDetail.d';
 
@@ -67,12 +62,16 @@ export const useConnectionRouteDetails = (props: ConnectionRouteDetailsProps) =>
     return entries;
   });
 
+  const delayPrediction = computed(() => props.delayPrediction ?? null);
+  const prediction = useConnectionPrediction(delayPrediction, routeStops);
+
   const toggleStop = (index: number): void => {
     selectedStopIndex.value = selectedStopIndex.value === index ? null : index;
   };
 
-  const isPastStop = (index: number): boolean =>
-    selectedStopIndex.value !== null && index < selectedStopIndex.value;
+  const isPastStop = (index: number): boolean => (
+    selectedStopIndex.value !== null && index < selectedStopIndex.value
+  );
 
   const isSelectedStop = (index: number): boolean => selectedStopIndex.value === index;
 
@@ -86,235 +85,28 @@ export const useConnectionRouteDetails = (props: ConnectionRouteDetailsProps) =>
 
   const getStopMeta = (stop: RouteStopEntry): string => {
     if (stop.kind === 'start') {
-      return `${t('views.dashboard.events.connection.startLabel')} · ${t('views.dashboard.events.connection.departureLabel')} ${stop.departureTime ?? ''}`.trim();
+      return `${t('views.dashboard.events.connection.startLabel')} \u00b7 ${t('views.dashboard.events.connection.departureLabel')} ${stop.departureTime ?? ''}`.trim();
     }
 
     if (stop.kind === 'end') {
-      return `${t('views.dashboard.events.connection.endLabel')} · ${t('views.dashboard.events.connection.arrivalLabel')} ${stop.arrivalTime ?? ''}`.trim();
+      return `${t('views.dashboard.events.connection.endLabel')} \u00b7 ${t('views.dashboard.events.connection.arrivalLabel')} ${stop.arrivalTime ?? ''}`.trim();
     }
 
     return [
       stop.arrivalTime ? `${t('views.dashboard.events.connection.arrivalLabel')} ${stop.arrivalTime}` : null,
       stop.departureTime ? `${t('views.dashboard.events.connection.continueLabel')} ${stop.departureTime}` : null,
-    ].filter(Boolean).join(' · ');
-  };
-
-  const getTransitIncomingSegment = (index: number): ConnectionSegment | null => {
-    const stop = routeStops.value[index];
-
-    if (!stop) {
-      return null;
-    }
-
-    if (stop.incomingSegment?.productType !== 'walk') {
-      return stop.incomingSegment;
-    }
-
-    const previousStop = routeStops.value[index - 1] ?? null;
-    return previousStop?.incomingSegment?.productType !== 'walk' ? previousStop?.incomingSegment ?? null : null;
-  };
-
-  const getTransitOutgoingSegment = (index: number): ConnectionSegment | null => {
-    const stop = routeStops.value[index];
-
-    if (!stop) {
-      return null;
-    }
-
-    if (stop.outgoingSegment?.productType !== 'walk') {
-      return stop.outgoingSegment;
-    }
-
-    const nextStop = routeStops.value[index + 1] ?? null;
-    return nextStop?.outgoingSegment?.productType !== 'walk' ? nextStop?.outgoingSegment ?? null : null;
-  };
-
-  const getTransferAssessment = (index: number): ConnectionTransferAssessment | null => {
-    if (!props.delayPrediction) {
-      return null;
-    }
-
-    const incomingSegment = getTransitIncomingSegment(index);
-    const outgoingSegment = getTransitOutgoingSegment(index);
-
-    if (!incomingSegment || !outgoingSegment) {
-      return null;
-    }
-
-    return props.delayPrediction.transferAssessments.find((assessment) => (
-      assessment.incomingSegmentId === incomingSegment.id && assessment.outgoingSegmentId === outgoingSegment.id
-    )) ?? null;
-  };
-
-  const getTransferTone = (successProbability: number | null): 'good' | 'warn' | 'bad' | 'neutral' => {
-    if (successProbability === null) {
-      return 'neutral';
-    }
-
-    if (successProbability >= 0.8) {
-      return 'good';
-    }
-
-    if (successProbability >= 0.5) {
-      return 'warn';
-    }
-
-    return 'bad';
-  };
-
-  const getPrimaryDelayCall = (index: number): ConnectionDelayCall | null => {
-    if (!props.delayPrediction) {
-      return null;
-    }
-
-    const stop = routeStops.value[index];
-
-    if (!stop) {
-      return null;
-    }
-
-    if (stop.kind === 'start') {
-      const outgoingSegment = stop.outgoingSegment;
-
-      if (outgoingSegment) {
-        return props.delayPrediction.calls.find((call) => call.key === `${outgoingSegment.id}-departure`) ?? null;
-      }
-    }
-
-    if (stop.kind === 'end') {
-      const incomingSegment = stop.incomingSegment;
-
-      if (incomingSegment) {
-        return props.delayPrediction.calls.find((call) => call.key === `${incomingSegment.id}-arrival`) ?? null;
-      }
-    }
-
-    return null;
-  };
-
-  const getPredictionProbability = (index: number): number | null => {
-    const stop = routeStops.value[index];
-
-    if (!stop) {
-      return null;
-    }
-
-    if (stop.kind === 'stop') {
-      return getTransferAssessment(index)?.successProbability ?? null;
-    }
-
-    return getPrimaryDelayCall(index)?.probabilityLate ?? null;
-  };
-
-  const getPredictionTone = (index: number): 'good' | 'warn' | 'bad' | 'neutral' => {
-    const stop = routeStops.value[index];
-
-    if (!stop) {
-      return 'neutral';
-    }
-
-    if (stop.kind === 'stop') {
-      return getTransferTone(getPredictionProbability(index));
-    }
-
-    const probability = getPredictionProbability(index);
-
-    if (probability === null) {
-      return 'neutral';
-    }
-
-    if (probability <= 0.2) {
-      return 'good';
-    }
-
-    if (probability <= 0.5) {
-      return 'warn';
-    }
-
-    return 'bad';
-  };
-
-  const getStopPredictionLabel = (index: number): string | null => {
-    const stop = routeStops.value[index];
-    const probability = formatProbability(getPredictionProbability(index));
-
-    if (!stop || !probability) {
-      return null;
-    }
-
-    if (stop.kind === 'start') {
-      return t('views.dashboard.events.connection.departureProbabilityShort', { value: probability });
-    }
-
-    if (stop.kind === 'end') {
-      return t('views.dashboard.events.connection.arrivalProbabilityShort', { value: probability });
-    }
-
-    return t('views.dashboard.events.connection.transferPossibleShort', { value: probability });
-  };
-
-  const getStopPredictionTitle = (index: number): string | null => {
-    const stop = routeStops.value[index];
-
-    if (!stop) {
-      return null;
-    }
-
-    if (stop.kind === 'start') {
-      return t('views.dashboard.events.connection.departureProbabilityLabel');
-    }
-
-    if (stop.kind === 'end') {
-      return t('views.dashboard.events.connection.arrivalProbabilityLabel');
-    }
-
-    return t('views.dashboard.events.connection.transferPossibleLabel');
-  };
-
-  const getStopPredictionValue = (index: number): string | null => formatProbability(getPredictionProbability(index));
-
-  const getRelatedDelayCalls = (index: number): ConnectionDelayCall[] => {
-    if (!props.delayPrediction) {
-      return [];
-    }
-
-    const related: ConnectionDelayCall[] = [];
-    const incomingSegment = getTransitIncomingSegment(index);
-    const outgoingSegment = getTransitOutgoingSegment(index);
-
-    if (incomingSegment) {
-      const incomingCall = props.delayPrediction.calls.find((call) => call.key === `${incomingSegment.id}-arrival`) ?? null;
-
-      if (incomingCall) {
-        related.push(incomingCall);
-      }
-    }
-
-    if (outgoingSegment) {
-      const outgoingCall = props.delayPrediction.calls.find((call) => call.key === `${outgoingSegment.id}-departure`) ?? null;
-
-      if (outgoingCall) {
-        related.push(outgoingCall);
-      }
-    }
-
-    return related;
+    ].filter(Boolean).join(' \u00b7 ');
   };
 
   return {
     getOffsetLabel,
-    getPredictionTone,
-    getRelatedDelayCalls,
     getStopMeta,
-    getStopPredictionLabel,
-    getStopPredictionTitle,
-    getStopPredictionValue,
-    getTransferAssessment,
     isPastStop,
     isSelectedStop,
     routeStops,
     selectedStopIndex,
     t,
     toggleStop,
+    ...prediction,
   };
 };

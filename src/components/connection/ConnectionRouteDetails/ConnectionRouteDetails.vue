@@ -33,7 +33,7 @@ const {
   <div v-if="routeStops.length > 0" class="connection-route">
     <div class="connection-route-overview" :set="option = props.option">
       <strong class="connection-route-title">{{ props.title ?? t('views.dashboard.events.connection.route')
-      }}</strong>
+        }}</strong>
       <div class="connection-route-overview-times">
         <Item label="departureLabel" :value="option.departureTime" type="connection" />
         <Item label="arrivalLabel" :value="option.arrivalTime" type="connection" />
@@ -66,10 +66,10 @@ const {
               <span class="connection-route-stop-meta">{{ getStopMeta(stop) }}</span>
             </span>
             <span class="connection-route-stop-side">
-              <span v-if="getStopPredictionLabel(index)" class="connection-route-prediction-button"
-                :class="`connection-route-prediction-button--${getPredictionTone(index)}`"
+              <span v-if="getStopPredictionLabel(stop)" class="connection-route-prediction-button"
+                :class="`connection-route-prediction-button--${getPredictionTone(stop)}`"
                 @click.stop="toggleStop(index)">
-                {{ getStopPredictionLabel(index) }}
+                {{ getStopPredictionLabel(stop) }}
               </span>
               <Chip :text="getOffsetLabel(stop)" class="connection-route-offset" type="blank" />
 
@@ -80,10 +80,10 @@ const {
 
           <ConnectionRouteDetail v-if="isSelectedStop(index)" :stop="stop"
             :delay-prediction="props.delayPrediction ?? null" :origin-address="props.originAddress ?? null"
-            :destination-address="props.destinationAddress ?? null" :prediction-tone="getPredictionTone(index)"
-            :stop-prediction-title="getStopPredictionTitle(index)"
-            :stop-prediction-value="getStopPredictionValue(index)" :related-delay-calls="getRelatedDelayCalls(index)"
-            :transfer-assessment="getTransferAssessment(index)" />
+            :destination-address="props.destinationAddress ?? null" :prediction-tone="getPredictionTone(stop)"
+            :stop-prediction-title="getStopPredictionTitle(stop)"
+            :stop-prediction-value="getStopPredictionValue(stop)" :related-delay-calls="getRelatedDelayCalls(stop)"
+            :transfer-assessment="getTransferAssessment(stop)" />
         </div>
       </li>
     </ol>

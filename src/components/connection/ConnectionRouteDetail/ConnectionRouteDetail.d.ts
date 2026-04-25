@@ -16,6 +16,8 @@ export type RouteStopEntry = {
   outgoingSegment: ConnectionSegment | null;
 };
 
+export type $RouteStopEntry = RouteStopEntry | undefined;
+
 export type DetailTone = 'good' | 'warn' | 'bad' | 'neutral';
 
 export type ConnectionRouteDetailProps = {
