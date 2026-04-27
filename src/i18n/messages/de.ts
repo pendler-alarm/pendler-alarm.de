@@ -70,7 +70,7 @@ export const de = {
         title: 'Alternative per iCal',
         description: 'Du kannst statt Google OAuth auch eine offentliche iCal-Adresse fur den Kalender hinterlegen.',
         inputLabel: 'iCal Adresse',
-        placeholder: 'https://calendar.google.com/calendar/ical/.../basic.ics',
+        placeholder: 'https://willi84.github.io/pendler-api/calendar.ics',
         activeUrl: 'Aktive iCal Adresse: {value}',
       },
       error: {
