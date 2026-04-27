@@ -1,5 +1,5 @@
 import type { ChipType } from '@/components/Chip/Chip.d';
-import type { StyledItemProps } from '@/components/Item/Item.d';
+import type { LINK, StyledItemProps } from '@/components/Item/Item.d';
 
 export type ChipItemProps = {
   chipType?: ChipType;
@@ -14,7 +14,7 @@ export type ChipItemProps = {
   separator?: string;
   show?: boolean;
   text?: string | null;
-  link?: string | null;
+  link?: LINK | null;
   type?: string;
   value?: string | null;
 };

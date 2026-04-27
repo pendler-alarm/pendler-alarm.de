@@ -1,6 +1,6 @@
 <template>
 
-  <component :is="tagName" v-if="shouldRender" :class="rootClassName" v-bind="rootAttributes" :data-type="resolvedType">
+  <component :is="resolvedTagName" v-if="shouldRender" :class="resolvedRootClassName" v-bind="resolvedRootAttributes" :data-type="resolvedType">
     <span v-if="props.emoji" class="chip__emoji" aria-hidden="true">{{ props.emoji }}</span>
     <slot v-if="hasCustomSlot" name="custom" />
     <span v-else>{{ label }}</span>
@@ -39,7 +39,7 @@ export default defineComponent({
 
     const isLink = computed(() => Boolean(props.link?.href));
     const hasCustomSlot = hasRenderableSlotContent(slots.custom?.());
-    const tagName = computed(() => {
+    const resolvedTagName = computed(() => {
       if (isLink.value) {
         return 'a';
       }
@@ -51,14 +51,14 @@ export default defineComponent({
     const resolvedType: ChipType = getTypeByConfig(props, CHIP_TYPE_CONFIG);
     const shouldRender = computed(() => hasCustomSlot || checkVisibility(props, ['text', 'link']));
     const label = computed(() => { return getLabel(resolvedType, props); }); // TODO: getLabel from utils
-    const rootClassName = computed(() => getClassNames(resolvedType, isLink.value, props.className));
-    const rootAttributes = computed(() => getLinkAttributes(props.link));
+    const resolvedRootClassName = computed(() => getClassNames(resolvedType, isLink.value, props.className));
+    const resolvedRootAttributes = computed(() => getLinkAttributes(props.link));
 
     return {
-      tagName,
+      resolvedTagName,
       hasCustomSlot,
-      rootAttributes,
-      rootClassName,
+      resolvedRootAttributes,
+      resolvedRootClassName,
       resolvedType,
       label,
       props,

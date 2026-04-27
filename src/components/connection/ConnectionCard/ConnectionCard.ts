@@ -10,11 +10,11 @@ import {
 } from '@/components/connection/connection-utils';
 import type { ConnectionOption, ConnectionSummary } from '@/features/motis/routing-service.d';
 import type { SharingSuggestion } from '@/features/sharing/sharing-service';
+import type { LINK } from '@/components/Item/Item.d';
 import type { ConnectionCardProps } from './ConnectionCard.d';
 
 // 🧩 COMPONENTS
 import ProductIcon from '@/components/ProductIcon/ProductIcon.vue';
-import SvgIcon from '@/components/SvgIcon/SvgIcon.vue';
 import ChipItem from '@/components/ChipItem/ChipItem.vue';
 import Chip from '@/components/Chip/Chip.vue';
 import Item from '@/components/Item/Item.vue';
@@ -30,7 +30,6 @@ const components = {
   ConnectionRouteDetails,
   ProductIcon,
   SharingOptionCard,
-  SvgIcon,
 };
 
 export default defineComponent({
@@ -100,12 +99,11 @@ export default defineComponent({
         travelerProfileParam: props.bahnTravelerProfileParam,
       });
     });
-    const bahnBookingLink = computed(() => {
-      return {
-        href: 'https://www.bahn.de/p/view/angebot/buchungsstrecke.shtml?lang=de&country=DEU&rt=1&start=Berlin%20Hbf&destination=Munchen%20Hbf&date=2024-12-31&time=12:00&trainCategory=ICE&trainNumber=123&bookingClass=2',
-        text: 'foobar'
-      };
-    });
+    const bahnBookingLink = computed<LINK | null>(() => (
+      bahnBookingUrl.value
+        ? { href: bahnBookingUrl.value }
+        : null
+    ));
     const riskyTransfer = computed(
       () =>
         props.connection.delayPrediction?.transferAssessments

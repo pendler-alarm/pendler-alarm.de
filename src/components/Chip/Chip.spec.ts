@@ -5,6 +5,7 @@ import Chip from './Chip.vue';
 import { mount } from '@vue/test-utils';
 import { createI18n } from 'vue-i18n';
 import { setLocale } from '@/i18n';
+import type { ChipType } from './Chip.d';
 
 const href = 'https://example.com';
 
@@ -131,7 +132,7 @@ describe('getConfigClassName()', () => {
         expect(result).toBe('chip--good');
     });
     it('returns "default" for an invalid chip type', () => {
-        const result = FN('nonexistent' as any);
+        const result = FN('nonexistent' as ChipType);
         expect(result).toBe('chip--default');
     });
 });
@@ -183,7 +184,7 @@ describe('getChipTypeConfig()', () => {
         });
     });
     it('returns the default config for an invalid chip type', () => {
-        const result = FN('nonexistent' as any);
+        const result = FN('nonexistent' as ChipType);
         expect(result).toEqual({
             className: 'chip--default',
         });

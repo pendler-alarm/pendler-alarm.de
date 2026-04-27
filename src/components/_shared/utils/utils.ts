@@ -1,9 +1,21 @@
 import { translate } from '@/i18n';
 import { SHORTCUTS } from './utils.config';
-import type { $string, STYLES, STYLES_CONFIG } from './utils.d';
+import type { $string, STYLES_CONFIG } from './utils.d';
 import type { VNode } from 'vue';
 import { Fragment } from 'vue';
 import type { LINK } from '@/components/Item/Item';
+
+type PropertyContainer = Record<string, unknown>;
+type VisibilityProps = PropertyContainer & { show?: boolean };
+type LabelProps = PropertyContainer & {
+    label?: string | null;
+    labelProps?: Record<string, unknown> | null;
+    type?: string | null;
+};
+type LinkProps = PropertyContainer & {
+    emoji?: string | null;
+    link?: LINK | null;
+};
 
 export const getLabel = (type: string, label: string, labelProps: Record<string, unknown> = {}) => {
     if (type === 'default') {
@@ -15,7 +27,7 @@ export const getLabel = (type: string, label: string, labelProps: Record<string,
     return isTranslated ? result : label;
 };
 
-export const checkVisibility = (props: any, optional: string[] = []) => {
+export const checkVisibility = (props: VisibilityProps, optional: string[] = []) => {
     let isVisible = false;
     if (props.show) {
         return true;
@@ -28,7 +40,7 @@ export const checkVisibility = (props: any, optional: string[] = []) => {
     }
     return isVisible;
 };
-export const getValue = (props: any, optional: string[] = []): $string => {
+export const getValue = (props: PropertyContainer, optional: string[] = []): $string => {
     let result = null;
     for (const keys of optional) {
         const subKeys = keys.split('.');
@@ -50,7 +62,7 @@ export const getValue = (props: any, optional: string[] = []): $string => {
     return result;
 };
 
-export const getStyles = (props: any, styleConfig: STYLES_CONFIG) => {
+export const getStyles = (props: PropertyContainer, styleConfig: STYLES_CONFIG) => {
     const styles = props.labelStyle || {};
     const customCSS = props?.css || '';
     const keys = Object.keys(styles);
@@ -80,7 +92,7 @@ export const hasRenderableSlotContent = (nodes: VNode[] = []): boolean => nodes.
     return true;
 });
 
-export const isLinkText = (props: any): string[] => {
+export const isLinkText = (props: LinkProps): string[] => {
     const link: LINK = props.link || null;
     if (link?.text) {
         return ['link.text'];
@@ -90,17 +102,17 @@ export const isLinkText = (props: any): string[] => {
     }
     return [];
 };
-export const getType = (props: any): string => {
+export const getType = (props: { type?: string | null }): string => {
     return props.type || 'default';
 };
-export const getLabelByType = (props: any) => {
+export const getLabelByType = (props: LabelProps) => {
     const resolvedType = getType(props);
     return getLabel(resolvedType, props.label || '', props.labelProps || {});
 };
 export const isVisibleLink = (link: LINK): boolean => {
     return link && !link.noLink && link.href ? true : false;
 };
-export const getTypeByConfig = (props: any, config: any) => {
+export const getTypeByConfig = (props: { type?: string | null }, config: Record<string, unknown>) => {
     const type = props.type;
     return type && type in config ? type : 'default';
 };

@@ -1,7 +1,6 @@
 import { translate } from '@/i18n';
 import type { ChipProps, ChipType, ChipTypeConfig } from './Chip.d';
 import { CHIP_TYPE_CONFIG, DEFAULT_CHIP_TYPE } from './Chip.config';
-import { useI18n } from 'vue-i18n';
 
 export const DEFAULT_CHIP_LINK_REL = ['noreferrer', 'noopener'].join(' ');
 export const DEFAULT_CHIP_LINK_TARGET = '_blank';

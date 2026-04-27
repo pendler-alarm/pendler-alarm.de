@@ -1,5 +1,5 @@
 <template>
-    <div :data-item-type="resolvedType" v-if="shouldRender && !isLink" :class="css">
+    <div :data-item-type="resolvedType" v-if="shouldRender && !isLink" :class="resolvedCss">
         <span data-type="emoji" v-if="emoji">{{ emoji }}</span>{{ seperator }}
         <span data-type="label" v-if="resolvedLabel" :class="[resolvedLabelStyle]">{{ resolvedLabel }}</span>{{
             seperator }}
@@ -38,7 +38,7 @@ export default defineComponent({
     },
     setup(props: ItemProps) {
         return {
-            css: computed(() => [props.css, props.inline ? 'item--inline' : null, props.bold ? 'item--bold' : null].filter(Boolean).join(' ')),
+            resolvedCss: computed(() => [props.css, props.inline ? 'item--inline' : null, props.bold ? 'item--bold' : null].filter(Boolean).join(' ')),
             isLink: computed(() => isVisibleLink(props.link as LINK)),
             shouldRender: computed(() => checkVisibility(props, ['label', 'value', 'link', 'emoji'])),
             resolvedLabel: computed(() => getLabelByType(props)),

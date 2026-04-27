@@ -9,7 +9,7 @@ import type {
   ConnectionTransferAssessment,
 } from '@/features/motis/routing-service.d';
 import type { $RouteStopEntry, RouteStopEntry } from '../ConnectionRouteDetail/ConnectionRouteDetail.d';
-import type { $PROBABILITY, ConnectionPrediction, PredictionContext, PredictionTone, PROBABILITY } from './prediction.d';
+import type { $PROBABILITY, ConnectionPrediction, PredictionContext, PredictionTone } from './prediction.d';
 import type { IN_OUT } from './segment/segment.d';
 import { getTransitIncomingSegment, getTransitOutgoingSegment } from './segment/segment';
 
@@ -135,14 +135,14 @@ export const getStopPredictionLabel = (
   if (!probability) { // TODO: auflösen
     return null;
   }
-  let key = 'transferPossibleShort'; // default
-  switch (stop.kind) {
-    case 'start': key = 'departureProbabilityShort'; break;
-    case 'end': key = 'arrivalProbabilityShort'; break;
-    default: key = 'transferPossibleShort';
-  }
+  const keyMap = {
+    start: 'views.dashboard.events.connection.departureProbabilityShort',
+    end: 'views.dashboard.events.connection.arrivalProbabilityShort',
+    stop: 'views.dashboard.events.connection.transferPossibleShort',
+  } as const;
+  const key = keyMap[stop.kind] ?? keyMap.stop;
 
-  return context.t(`views.dashboard.events.connection.${key}`, { value: probability });
+  return context.t(key, { value: probability });
 };
 /**
  * 🎯 Get the prediction title for a given stop within a connection prediction context.
@@ -155,14 +155,14 @@ export const getStopPredictionTitle = (
   stop: $RouteStopEntry,
 ): string | null => {
   if (!stop) return null;
-  let key = 'transferPossibleLabel'; // default
-  switch (stop.kind) {
-    case 'start': key = 'departureProbabilityLabel'; break;
-    case 'end': key = 'arrivalProbabilityLabel'; break;
-    default: key = 'transferPossibleLabel';
-  }
+  const keyMap = {
+    start: 'views.dashboard.events.connection.departureProbabilityLabel',
+    end: 'views.dashboard.events.connection.arrivalProbabilityLabel',
+    stop: 'views.dashboard.events.connection.transferPossibleLabel',
+  } as const;
+  const key = keyMap[stop.kind] ?? keyMap.stop;
 
-  return context.t(`views.dashboard.events.connection.${key}`);
+  return context.t(key);
 };
 /**
  * 🎯 Get the prediction value for a given stop within a connection prediction context.

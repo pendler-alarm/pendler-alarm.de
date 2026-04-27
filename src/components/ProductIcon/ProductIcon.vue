@@ -1,24 +1,10 @@
 <template>
-  <Emoji
-    v-if="emoji"
-    class="product-icon"
-    :emoji="emoji"
-    :decorative="props.decorative"
-    :label="props.label"
-    :dimension="resolvedEmojiDimension ?? undefined"
-    :width="resolvedEmojiWidth ?? undefined"
-    :height="resolvedEmojiHeight ?? undefined"
-    :font-size="resolvedEmojiFontSize ?? undefined"
-  />
-  <SvgIcon
-    v-else
-    class="product-icon"
-    :icon="icon"
-    :fallback-text="fallbackText"
-    :dimension="resolvedDimension ?? undefined"
-    :width="resolvedWidth ?? undefined"
-    :height="resolvedHeight ?? undefined"
-  />
+  <Emoji v-if="emoji" class="product-icon" :emoji="emoji" :decorative="props.decorative" :label="props.label"
+    :dimension="resolvedEmojiDimension ?? undefined" :width="resolvedEmojiWidth ?? undefined"
+    :height="resolvedEmojiHeight ?? undefined" :font-size="resolvedEmojiFontSize ?? undefined" />
+  <SvgIcon v-else class="product-icon" :icon="icon" :fallback-text="fallbackText"
+    :dimension="resolvedDimension ?? undefined" :width="resolvedWidth ?? undefined"
+    :height="resolvedHeight ?? undefined" />
 </template>
 
 <script lang="ts">
@@ -30,7 +16,7 @@ import {
   getConnectionProductFallbackLabel,
   getConnectionProductIcon,
 } from '@/components/connection/connection-utils';
-import type { ConnectionProductType } from '@/features/motis/routing-service';
+import type { ConnectionProductType } from '@/features/motis/routing-service.d';
 import type { RouteStopEntry } from '@/components/connection/ConnectionRouteDetail/ConnectionRouteDetail.d';
 import './ProductIcon.css';
 import type { ProductIconProps } from './ProductIcon.d';

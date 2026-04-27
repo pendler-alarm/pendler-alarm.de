@@ -39,16 +39,8 @@
     <div v-if="deutschlandticketAvailable || bahnBookingUrl" class="connection-ticket-actions">
       <ChipItem v-if="deutschlandticketAvailable" label="deutschlandticketInfo" emoji="🎫" chip-type="white"
         type="connection" />
-      <ChipItem label="bookTrainTicket" emoji="🛒" chip-type="white" :link="bahnBookingUrl" type="connection-link" />
-
-      LINK:
-      <ChipItem v-if="bahnBookingLink" :link="bahnBookingLink" type="connection-link" />
-
-      <a v-if="bahnBookingUrl" class="connection-booking-link" :href="bahnBookingUrl" target="_blank"
-        rel="noreferrer noopener">
-        <SvgIcon icon="material/open_in_new" :dimension="16" aria-hidden="true" />
-        <span>{{ t('views.dashboard.events.connection.bookTrainTicket') }}</span>
-      </a>
+      <ChipItem v-if="bahnBookingLink" label="bookTrainTicket" emoji="🛒" chip-type="white" :link="bahnBookingLink"
+        type="connection-link" />
     </div>
 
     <div :id="detailsContentId" class="connection-details expand-toggle-target expand-toggle-target--collapsed">

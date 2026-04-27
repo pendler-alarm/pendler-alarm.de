@@ -17,6 +17,9 @@ const enFilePath = path.join(srcRoot, 'i18n', 'messages', 'en.ts');
 const messageFiles = new Set([deFilePath, enFilePath]);
 const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 const ignoredFileSnippets = ['__tests__', '.spec.ts'];
+const i18nShorthandPrefixes: Record<string, string> = {
+  connection: 'views.dashboard.events.connection',
+};
 const allowedHardcodedFiles = new Set([
   path.join(srcRoot, 'router', 'routes.ts'),
   path.join(srcRoot, 'router', 'index.ts'),
@@ -93,6 +96,9 @@ const collectUsedKeys = (source: string, knownKeys: Set<string>): Set<string> =>
   const usedKeys = new Set<string>();
   const translationCallPattern = /(?:\$t|\bt|translate|i18n\.global\.t)\(\s*['"`]([^'"`]+)['"`]/g;
   const literalPattern = /(['"`])((?:\\.|(?!\1)[^\n\\])*)\1/g;
+  const shorthandPattern = /(?:type\s*[:=]\s*['"`](\w+)['"`][\s\S]{0,400}?label(?:Key)?\s*[:=]\s*['"`]([^'"`]+)['"`])|(?:label(?:Key)?\s*[:=]\s*['"`]([^'"`]+)['"`][\s\S]{0,400}?type\s*[:=]\s*['"`](\w+)['"`])/g;
+  const shorthandFunctionPattern = /(?:getLabel|toChipLabelKey)\(\s*['"`](\w+)['"`]\s*,\s*['"`]([^'"`]+)['"`]/g;
+  const shorthandLiteralPattern = /label(?:Key)?\s*[:=]\s*['"`]([^'"`]+)['"`]/g;
 
   for (const match of source.matchAll(translationCallPattern)) {
     usedKeys.add(match[1]);
@@ -103,6 +109,38 @@ const collectUsedKeys = (source: string, knownKeys: Set<string>): Set<string> =>
 
     if (knownKeys.has(value)) {
       usedKeys.add(value);
+    }
+  }
+
+  for (const match of source.matchAll(shorthandPattern)) {
+    const type = match[1] ?? match[4];
+    const key = match[2] ?? match[3];
+    const prefix = type ? i18nShorthandPrefixes[type] : null;
+    const resolvedKey = prefix && key ? `${prefix}.${key}` : null;
+
+    if (resolvedKey && knownKeys.has(resolvedKey)) {
+      usedKeys.add(resolvedKey);
+    }
+  }
+
+  for (const match of source.matchAll(shorthandFunctionPattern)) {
+    const prefix = i18nShorthandPrefixes[match[1]];
+    const resolvedKey = prefix ? `${prefix}.${match[2]}` : null;
+
+    if (resolvedKey && knownKeys.has(resolvedKey)) {
+      usedKeys.add(resolvedKey);
+    }
+  }
+
+  for (const match of source.matchAll(shorthandLiteralPattern)) {
+    const suffix = match[1];
+
+    for (const prefix of Object.values(i18nShorthandPrefixes)) {
+      const resolvedKey = `${prefix}.${suffix}`;
+
+      if (knownKeys.has(resolvedKey)) {
+        usedKeys.add(resolvedKey);
+      }
     }
   }
 

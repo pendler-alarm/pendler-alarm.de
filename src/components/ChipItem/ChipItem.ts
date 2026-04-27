@@ -1,6 +1,7 @@
-import { computed, defineComponent, type PropType } from 'vue';
+import { defineComponent, type PropType } from 'vue';
 import Chip from '@/components/Chip/Chip.vue';
 import Item from '@/components/Item/Item.vue';
+import type { LINK } from '@/components/Item/Item.d';
 import type { ChipItemProps } from './ChipItem.d';
 
 export default defineComponent({
@@ -20,6 +21,7 @@ export default defineComponent({
     rootAttributes: { type: Object, default: null },
     rootClassName: { type: [String, Array, Object], default: null },
     itemClassName: { type: [String, Array, Object], default: null },
+    link: { type: Object as PropType<LINK | null>, default: null },
     separator: { type: String, default: ' ' },
     show: { type: Boolean, default: true },
     text: { type: String, default: null },
@@ -28,13 +30,8 @@ export default defineComponent({
     valueBefore: { type: [String, Number], default: null }, // TODO: obsolet?
   },
   setup(props: ChipItemProps) {
-    // const value = (computed(() => props.value));
-    // const labelProps = (computed(() => props.labelProps));
-
     return {
-      // labelProps,
-      // value,
-      // props,
+      dummy: props.show
     };
   },
 });

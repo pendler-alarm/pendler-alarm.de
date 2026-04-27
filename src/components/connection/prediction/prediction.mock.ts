@@ -103,7 +103,7 @@ export const STOPS: RouteStopEntry[] = [
     {
         key: 'transfer-walk-start',
         kind: 'stop',
-        name: 'Transfer A',
+        name: 'Transfer_A',
         minuteOffset: 10,
         arrivalTime: '08:10',
         departureTime: '08:11',
@@ -113,7 +113,7 @@ export const STOPS: RouteStopEntry[] = [
     {
         key: 'transfer-walk-end',
         kind: 'stop',
-        name: 'Transfer B',
+        name: 'Transfer_B',
         minuteOffset: 14,
         arrivalTime: '08:14',
         departureTime: '08:15',
