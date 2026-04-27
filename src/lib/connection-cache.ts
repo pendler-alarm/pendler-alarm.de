@@ -1,4 +1,4 @@
-import type { ConnectionSummary } from '@/features/motis/routing-service';
+import type { ConnectionSummary } from '@/features/motis/routing-service.d';
 import { localStorageStore } from '@/lib/storage';
 
 type CachedConnection = {

@@ -10,7 +10,7 @@
 import { computed } from 'vue';
 import Item from '@/components/Item/Item.vue';
 import ProductIcon from '@/components/ProductIcon/ProductIcon.vue';
-import type { ConnectionSegment } from '@/features/motis/routing-service';
+import type { ConnectionSegment } from '@/features/motis/routing-service.d';
 import { formatConnectionServiceLabel } from '../connection/connection-utils';
 
 const props = defineProps<{

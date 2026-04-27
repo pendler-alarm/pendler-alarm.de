@@ -1,6 +1,21 @@
-import type { CHIP_TYPE_CONFIG } from './Chip.ts';
-
-export type ChipType = keyof typeof CHIP_TYPE_CONFIG;
+export type ChipType =
+  | 'default'
+  | 'white'
+  | 'good'
+  | 'success'
+  | 'blank'
+  | 'warn'
+  | 'bad'
+  | 'link'
+  | 'gray'
+  | 'connection'
+  | 'connection-good'
+  | 'connection-offset'
+  | 'connection-time'
+  | 'blue'
+  | 'connection-warn'
+  | 'connection-bad'
+  | 'connection-link';
 export type ChipLink = {
   href: string;
   text?: string;

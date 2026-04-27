@@ -34,7 +34,7 @@ const formatTime = (value?: string): string => {
 };
 
 const formatModeName = (mode?: string): string =>
-  mode?.replaceAll('_', ' ').trim() || translate('calendar.connection.modeUnknown');
+  mode?.replace(/_/gu, ' ').trim() || translate('calendar.connection.modeUnknown');
 
 const getLegLabel = (leg: MotisLeg): string => {
   const mode = leg.mode?.toUpperCase().trim() ?? '';

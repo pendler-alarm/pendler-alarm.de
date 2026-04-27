@@ -3,7 +3,7 @@ import { SHORTCUTS } from './utils.config';
 import type { $string, STYLES_CONFIG } from './utils.d';
 import type { VNode } from 'vue';
 import { Fragment } from 'vue';
-import type { LINK } from '@/components/Item/Item';
+import type { LINK, StyledItemProps } from '@/components/Item/Item.d';
 
 type PropertyContainer = Record<string, unknown>;
 type VisibilityProps = PropertyContainer & { show?: boolean };
@@ -14,8 +14,16 @@ type LabelProps = PropertyContainer & {
 };
 type LinkProps = PropertyContainer & {
     emoji?: string | null;
-    link?: LINK | null;
+    link?: Partial<LINK> | null;
 };
+type NestedPropertyContainer = Record<string, unknown>;
+type StyledProps = PropertyContainer & {
+    labelStyle?: StyledItemProps | null;
+    css?: string | null;
+};
+
+const isRecord = (value: unknown): value is NestedPropertyContainer =>
+    typeof value === 'object' && value !== null;
 
 export const getLabel = (type: string, label: string, labelProps: Record<string, unknown> = {}) => {
     if (type === 'default') {
@@ -46,30 +54,35 @@ export const getValue = (props: PropertyContainer, optional: string[] = []): $st
         const subKeys = keys.split('.');
         if (subKeys.length === 1) {
             const key: $string = subKeys[0];
-            if (key && props[key]) {
-                result = props[key];
+            const value = key ? props[key] : null;
+            if (typeof value === 'string' && value) {
+                result = value;
                 break;
             }
         } else if (subKeys.length === 2) {
             const key: $string = subKeys[0];
             const subKey: $string = subKeys[1];
-            if (key && props[key] && subKey && props[key][subKey]) {
-                result = props[key][subKey];
-                break;
+            const value = key ? props[key] : null;
+            if (subKey && isRecord(value)) {
+                const nestedValue = value[subKey];
+                if (typeof nestedValue === 'string' && nestedValue) {
+                    result = nestedValue;
+                    break;
+                }
             }
         }
     };
     return result;
 };
 
-export const getStyles = (props: PropertyContainer, styleConfig: STYLES_CONFIG) => {
+export const getStyles = (props: StyledProps, styleConfig: STYLES_CONFIG) => {
     const styles = props.labelStyle || {};
     const customCSS = props?.css || '';
     const keys = Object.keys(styles);
     let css = customCSS;
     for (const key of keys) {
         const className = styleConfig[key];
-        if (styles[key] && className) {
+        if (styles[key as keyof StyledItemProps] && className) {
             css += ` ${className}`;
         }
     }
@@ -93,7 +106,7 @@ export const hasRenderableSlotContent = (nodes: VNode[] = []): boolean => nodes.
 });
 
 export const isLinkText = (props: LinkProps): string[] => {
-    const link: LINK = props.link || null;
+    const link = props.link;
     if (link?.text) {
         return ['link.text'];
     }
@@ -112,7 +125,10 @@ export const getLabelByType = (props: LabelProps) => {
 export const isVisibleLink = (link: LINK): boolean => {
     return link && !link.noLink && link.href ? true : false;
 };
-export const getTypeByConfig = (props: { type?: string | null }, config: Record<string, unknown>) => {
+export const getTypeByConfig = <TypeKey extends string>(
+    props: { type?: TypeKey | null },
+    config: Record<TypeKey, unknown>,
+): TypeKey => {
     const type = props.type;
-    return type && type in config ? type : 'default';
+    return type && type in config ? type : 'default' as TypeKey;
 };
