@@ -5,9 +5,8 @@ import { fetchDelayPrediction } from '@/features/motis/delay-service';
 import {
   fetchNextConnection,
   getConnectionDistanceMeters,
-  type ConnectionProductType,
-  type ConnectionSummary,
 } from '@/features/motis/routing-service';
+import type { ConnectionProductType, ConnectionSummary } from '@/features/motis/routing-service.d';
 import {
   formatCoordinates,
   resolveLocation,
@@ -50,6 +49,12 @@ type CalendarApiEvent = {
 
 type CalendarApiResponse = {
   items?: CalendarApiEvent[];
+};
+
+type IcalProperty = {
+  name: string;
+  params: Record<string, string>;
+  value: string;
 };
 
 type EnrichedLocation = {
@@ -109,7 +114,8 @@ const getRouteBasedMinimumBufferMinutes = (connection: ConnectionSummary | null)
     return DEFAULT_CONNECTION_BUFFER_MINUTES;
   }
 
-  return connection.segments.some((segment) => BUFFER_COMPLEX_PRODUCT_TYPES.has(segment.productType))
+  return connection.segments.some((segment: ConnectionSummary['segments'][number]) =>
+    BUFFER_COMPLEX_PRODUCT_TYPES.has(segment.productType))
     ? MIN_COMPLEX_CONNECTION_BUFFER_MINUTES
     : DEFAULT_CONNECTION_BUFFER_MINUTES;
 };
@@ -188,6 +194,151 @@ const getEventStartIso = (start?: { date?: string; dateTime?: string }): string 
   }
 
   return null;
+};
+
+const parseIcalDateValue = (
+  value: string,
+  timeZone: string,
+): { date?: string; dateTime?: string; timeZone?: string } | null => {
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (/^\d{8}$/u.test(normalized)) {
+    return {
+      date: `${normalized.slice(0, 4)}-${normalized.slice(4, 6)}-${normalized.slice(6, 8)}`,
+      timeZone,
+    };
+  }
+
+  const utcMatch = normalized.match(
+    /^(?<year>\d{4})(?<month>\d{2})(?<day>\d{2})T(?<hour>\d{2})(?<minute>\d{2})(?<second>\d{2})Z$/u,
+  );
+
+  if (utcMatch?.groups) {
+    return {
+      dateTime: `${utcMatch.groups.year}-${utcMatch.groups.month}-${utcMatch.groups.day}T${utcMatch.groups.hour}:${utcMatch.groups.minute}:${utcMatch.groups.second}Z`,
+      timeZone,
+    };
+  }
+
+  const localMatch = normalized.match(
+    /^(?<year>\d{4})(?<month>\d{2})(?<day>\d{2})T(?<hour>\d{2})(?<minute>\d{2})(?<second>\d{2})$/u,
+  );
+
+  if (!localMatch?.groups) {
+    return null;
+  }
+
+  return {
+    dateTime: `${localMatch.groups.year}-${localMatch.groups.month}-${localMatch.groups.day}T${localMatch.groups.hour}:${localMatch.groups.minute}:${localMatch.groups.second}`,
+    timeZone,
+  };
+};
+
+const unfoldIcalLines = (value: string): string[] => value
+  .replaceAll('\r\n', '\n')
+  .replaceAll('\r', '\n')
+  .split('\n')
+  .reduce<string[]>((lines, line) => {
+    if ((line.startsWith(' ') || line.startsWith('\t')) && lines.length > 0) {
+      lines[lines.length - 1] += line.slice(1);
+      return lines;
+    }
+
+    lines.push(line);
+    return lines;
+  }, []);
+
+const parseIcalProperty = (line: string): IcalProperty | null => {
+  const separatorIndex = line.indexOf(':');
+
+  if (separatorIndex < 0) {
+    return null;
+  }
+
+  const left = line.slice(0, separatorIndex);
+  const value = line.slice(separatorIndex + 1);
+  const [name, ...paramEntries] = left.split(';');
+
+  if (!name) {
+    return null;
+  }
+
+  const params = Object.fromEntries(paramEntries.map((entry) => {
+    const [paramName, paramValue = ''] = entry.split('=');
+    return [(paramName ?? '').toUpperCase(), paramValue];
+  }));
+
+  return {
+    name: name.toUpperCase(),
+    params,
+    value,
+  };
+};
+
+const parseIcalEvents = (value: string): CalendarApiEvent[] => {
+  const lines = unfoldIcalLines(value);
+  const events: CalendarApiEvent[] = [];
+  let currentEvent: CalendarApiEvent | null = null;
+
+  lines.forEach((line) => {
+    if (line === 'BEGIN:VEVENT') {
+      currentEvent = {};
+      return;
+    }
+
+    if (line === 'END:VEVENT') {
+      if (currentEvent) {
+        events.push(currentEvent);
+      }
+
+      currentEvent = null;
+      return;
+    }
+
+    if (!currentEvent) {
+      return;
+    }
+
+    const property = parseIcalProperty(line);
+
+    if (!property) {
+      return;
+    }
+
+    if (property.name === 'UID') {
+      currentEvent.id = property.value.trim();
+      return;
+    }
+
+    if (property.name === 'SUMMARY') {
+      currentEvent.summary = property.value.trim();
+      return;
+    }
+
+    if (property.name === 'LOCATION') {
+      currentEvent.location = property.value.trim();
+      return;
+    }
+
+    if (property.name !== 'DTSTART') {
+      return;
+    }
+
+    const timeZone = property.params.TZID?.trim() || DEFAULT_TIME_ZONE;
+    const startValue = parseIcalDateValue(property.value, timeZone);
+
+    if (!startValue) {
+      return;
+    }
+
+    currentEvent.start = startValue;
+  });
+
+  return events;
 };
 
 const resolveEventLocation = async (rawLocation?: string): Promise<EnrichedLocation> => {
@@ -430,4 +581,45 @@ export const fetchUpcomingCalendarEvents = async (
   );
 
   return normalizedEvents.filter(isUpcomingEvent).slice(0, Number(MAX_EVENT_RESULTS));
+};
+
+export const fetchUpcomingIcalEvents = async (
+  icalUrl: string,
+): Promise<GoogleCalendarEvent[]> => {
+  const normalizedUrl = icalUrl.trim();
+
+  if (!normalizedUrl) {
+    throw new Error(translate('calendar.error.icalUrlMissing'));
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(normalizedUrl, {
+      headers: {
+        Accept: 'text/calendar, text/plain;q=0.9, */*;q=0.8',
+      },
+    });
+  } catch (error) {
+    throw new Error(
+      translate('calendar.error.icalLoadFailed', {
+        reason: error instanceof Error ? error.message : translate('views.dashboard.events.debug.history.errors.unknownFetch'),
+      }),
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(translate('calendar.error.icalLoadFailed', { reason: `HTTP ${String(response.status)}` }));
+  }
+
+  const icalText = await response.text();
+  const parsedEvents = parseIcalEvents(icalText);
+  const normalizedEvents = await Promise.all(
+    parsedEvents.map((event, index) => createBaseEvent(event, index)),
+  );
+
+  return normalizedEvents
+    .filter(isUpcomingEvent)
+    .sort((left, right) => new Date(left.startIso ?? '').getTime() - new Date(right.startIso ?? '').getTime())
+    .slice(0, Number(MAX_EVENT_RESULTS));
 };

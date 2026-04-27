@@ -3,17 +3,19 @@ import { watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import Widget from '@/components/Widget.vue';
+import { useCalendarSourceStore } from '@/features/calendar/calendar-source-store';
 import GoogleAuthCard from '@/features/auth/google/GoogleAuthCard.vue';
 import { useGoogleAuthStore } from '@/features/auth/google/store';
 
 const { t } = useI18n();
 const router = useRouter();
 const googleAuthStore = useGoogleAuthStore();
+const calendarSourceStore = useCalendarSourceStore();
 
 watch(
-  () => googleAuthStore.isAuthenticated,
-  (isAuthenticated) => {
-    if (isAuthenticated) {
+  () => `${String(googleAuthStore.isAuthenticated)}:${calendarSourceStore.mode}:${calendarSourceStore.normalizedIcalUrl}`,
+  () => {
+    if (googleAuthStore.isAuthenticated || calendarSourceStore.isIcalConfigured) {
       router.replace({ name: 'dashboard' });
     }
   },

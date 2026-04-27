@@ -1,0 +1,112 @@
+.connection-route-stop-details {
+  display: grid;
+  gap: 10px;
+  padding: 10px 8px 4px 0;
+  min-width: 0;
+}
+
+.connection-route-address-row,
+.connection-route-mobility {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.connection-route-time-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.connection-route-mobility-subsection {
+  display: grid;
+  gap: 8px;
+}
+
+.connection-route-mobility-subtitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #334155;
+  font-size: 0.82rem;
+}
+
+.connection-route-mobility-parking-icon::before {
+  content: 'P';
+}
+
+.connection-route-mobility-parking-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.connection-route-mobility-item {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  min-width: 0;
+}
+
+.connection-route-mobility-item p {
+  margin: 0;
+  color: #334155;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.connection-route-mobility-item strong {
+  overflow-wrap: anywhere;
+}
+
+.connection-route-mobility-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #334155;
+  font-size: 0.82rem;
+}
+
+.connection-route-mobility-photo {
+  width: 100%;
+  max-width: 240px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  margin-top: 4px;
+}
+
+.connection-route-mobility-more-button {
+  justify-self: start;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.92);
+  color: #334155;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.connection-route-lines {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #27272a;
+  font-size: 0.9rem;
+}
+
+.connection-route-line-product {
+  flex: 0 0 auto;
+}

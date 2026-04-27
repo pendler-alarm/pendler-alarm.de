@@ -17,11 +17,11 @@
     </div>
     <div v-if="showActions" class="widget-actions">
       <slot name="actions">
-        <ActionButton>
+        <!--ActionButton>
           <template #label>
             {{ ('components.widget.api') }}
           </template>
-        </ActionButton>
+        </ActionButton-->
       </slot>
     </div>
   </section>
@@ -29,7 +29,7 @@
 
 <script lang="ts">
 import ActionButton from './ActionButton.vue';
-import SvgIcon from './SvgIcon.vue';
+import SvgIcon from './SvgIcon/SvgIcon.vue';
 
 export default {
   name: 'Widget',

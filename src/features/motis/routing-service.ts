@@ -1,221 +1,17 @@
- 
+
 import { getLocale, translate } from '@/i18n';
 import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
 import { MOTIS_API_PLAN } from '@/utils/constants/api';
-import { createPlaceQuery, type Coordinates } from './location-service';
-
-export type ConnectionStatus = 'on_time' | 'delayed';
-
-export type ConnectionProductType =
-  | 'regio'
-  | 'sbahn'
-  | 'ubahn'
-  | 'bus'
-  | 'tram'
-  | 'train'
-  | 'ice'
-  | 'ic'
-  | 'flight'
-  | 'ferry'
-  | 'walk';
-
-export type ConnectionSegment = {
-  id: string;
-  productType: ConnectionProductType;
-  productLabel: string;
-  lineLabel: string;
-  fromStop: string;
-  fromStopId: string | null;
-  fromCoordinates: Coordinates | null;
-  toStop: string;
-  toStopId: string | null;
-  toCoordinates: Coordinates | null;
-  departureIso: string | null;
-  departureTime: string;
-  arrivalIso: string | null;
-  arrivalTime: string;
-};
-
-export type ConnectionDelayDistributionBucket = {
-  delayMinutes: number;
-  probability: number;
-};
-
-export type ConnectionDelayCall = {
-  key: string;
-  stopName: string;
-  stopId: string | null;
-  serviceLabel: string;
-  eventType: 'departure' | 'arrival';
-  plannedIso: string | null;
-  likelyIso: string | null;
-  expectedDelayMinutes: number | null;
-  mostLikelyDelayMinutes: number | null;
-  p50DelayMinutes: number | null;
-  p90DelayMinutes: number | null;
-  probabilityLate: number | null;
-  distribution: ConnectionDelayDistributionBucket[];
-};
-
-export type ConnectionTransferAssessment = {
-  key: string;
-  fromStopName: string;
-  toStopName: string;
-  incomingSegmentId: string;
-  outgoingSegmentId: string;
-  transferMinutes: number | null;
-  successProbability: number | null;
-  missedProbability: number | null;
-  arrivalExpectedDelayMinutes: number | null;
-  arrivalP50DelayMinutes: number | null;
-  arrivalP90DelayMinutes: number | null;
-  departureExpectedDelayMinutes: number | null;
-  departureP50DelayMinutes: number | null;
-  departureP90DelayMinutes: number | null;
-};
-
-export type MobilityHubSharingStation = {
-  stationId: string | null;
-  name: string;
-  operator: string | null;
-  capacity: number | null;
-  lat: number;
-  lon: number;
-  lastReported: string | null;
-  realtimeAvailability: Array<{
-    key: string;
-    mode: string;
-    value: number;
-  }>;
-};
-
-export type MobilityHubParkingSite = {
-  id: string | null;
-  name: string;
-  purpose: string | null;
-  capacity: number | null;
-  type: string | null;
-  lat: number;
-  lon: number;
-  modifiedAt: string | null;
-  photoUrl: string | null;
-  realtimeFreeCapacity: number | null;
-};
-
-export type ConnectionMobilityHubGroup = {
-  lat: number;
-  lon: number;
-  parkingSites: MobilityHubParkingSite[];
-  sharingStations: MobilityHubSharingStation[];
-};
-
-export type ConnectionDelayPrediction = {
-  likelyConnection: ConnectionOption | null;
-  expectedDepartureDelayMinutes: number | null;
-  expectedArrivalDelayMinutes: number | null;
-  p50DepartureDelayMinutes: number | null;
-  p50ArrivalDelayMinutes: number | null;
-  p90DepartureDelayMinutes: number | null;
-  p90ArrivalDelayMinutes: number | null;
-  probabilityArrivalLate: number | null;
-  calls: ConnectionDelayCall[];
-  transferAssessments: ConnectionTransferAssessment[];
-  mobilityHubRadiusMeters: number | null;
-  originMobilityHubs: ConnectionMobilityHubGroup | null;
-  destinationMobilityHubs: ConnectionMobilityHubGroup | null;
-  historyAvailable: boolean;
-  historyNote: string | null;
-};
-
-export type ConnectionOption = {
-  departureIso: string | null;
-  departureTime: string;
-  arrivalIso: string | null;
-  arrivalTime: string;
-  fromStop: string;
-  toStop: string;
-  durationMinutes: number | null;
-  transferCount: number;
-  transportModes: string[];
-  segments: ConnectionSegment[];
-  status: ConnectionStatus;
-  delayPrediction?: ConnectionDelayPrediction | null;
-};
-
-export type ConnectionSummary = ConnectionOption & {
-  alternatives: ConnectionOption[];
-  requestedBufferMinutes: number;
-  effectiveBufferMinutes: number;
-  minimumBufferMinutes: number;
-};
-
-type FetchConnectionOptions = {
-  time?: string;
-  latestArrivalIso?: string;
-  arriveBy?: boolean;
-  maxConnections?: number;
-  searchWindowMinutes?: number;
-  showTransferWalkNodes?: boolean;
-};
-
-type MotisPlace = {
-  stopId?: string;
-  name?: string;
-  lat?: number;
-  lon?: number;
-  level?: number;
-  departure?: string;
-  arrival?: string;
-  scheduledDeparture?: string;
-  scheduledArrival?: string;
-};
-
-type MotisLeg = {
-  mode?: string;
-  from?: MotisPlace;
-  to?: MotisPlace;
-  departure?: string;
-  arrival?: string;
-  scheduledDeparture?: string;
-  scheduledArrival?: string;
-  duration?: number;
-  realTime?: boolean;
-  cancelled?: boolean;
-  tripCancelled?: boolean;
-  routeShortName?: string;
-  tripShortName?: string;
-  displayName?: string;
-  headsign?: string;
-  steps?: Array<{
-    distance?: number;
-    relativeDirection?: string;
-    streetName?: string;
-  }>;
-};
-
-type MotisItinerary = {
-  legs?: MotisLeg[];
-  transfers?: number;
-  departure?: string;
-  arrival?: string;
-  startTime?: string;
-  endTime?: string;
-  scheduledDeparture?: string;
-  scheduledArrival?: string;
-};
-
-type MotisPlanResponse =
-  | MotisItinerary[]
-  | {
-    itineraries?: MotisItinerary[];
-    direct?: MotisItinerary[];
-  };
+import { createPlaceQuery, type $Coordinates, type Coordinates } from './location-service';
+import type { ConnectionOption, ConnectionProductType, ConnectionSegment, ConnectionStatus, ConnectionSummary, FetchConnectionOptions, MotisItinerary, MotisLeg, MotisPlace, MotisPlanResponse } from './routing-service.d';
 
 const nonTransitModes = new Set(['WALK', 'BIKE', 'CAR', 'CAR_PARKING', 'CAR_DROPOFF', 'RENTAL']);
 const displayNonTransitModes = new Set(['WALK']);
 const DEFAULT_MAX_CONNECTIONS = 3;
 const WALK_TRANSFER_DISTANCE_THRESHOLD_METERS = 180;
 const WALK_TRANSFER_DURATION_THRESHOLD_SECONDS = 180;
+
+// TODO: configurable
 const tramLinePattern = /\b(tram|str|m\d{1,2})\b/i;
 const sbahnPattern = /\bs\s?\d{1,2}\b/i;
 const ubahnPattern = /\bu\s?\d{1,2}\b/i;
@@ -238,7 +34,7 @@ const formatTime = (value?: string): string => {
 };
 
 const formatModeName = (mode?: string): string =>
-  mode?.replaceAll('_', ' ').trim() || translate('calendar.connection.modeUnknown');
+  mode?.replace(/_/gu, ' ').trim() || translate('calendar.connection.modeUnknown');
 
 const getLegLabel = (leg: MotisLeg): string => {
   const mode = leg.mode?.toUpperCase().trim() ?? '';
@@ -395,8 +191,8 @@ const getDistanceMeters = (from: Coordinates, to: Coordinates): number => {
 };
 
 export const getConnectionDistanceMeters = (
-  from: Coordinates | null | undefined,
-  to: Coordinates | null | undefined,
+  from: $Coordinates,
+  to: $Coordinates,
 ): number | null => {
   if (!from || !to) {
     return null;

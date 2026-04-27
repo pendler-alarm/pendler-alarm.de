@@ -3,14 +3,16 @@ import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
 import type { Coordinates } from '@/features/motis/location-service';
 import {
   buildConnectionSummaryFromPlanResponse,
-  type ConnectionMobilityHubGroup,
-  type ConnectionDelayCall,
-  type ConnectionDelayDistributionBucket,
-  type ConnectionDelayPrediction,
-  type ConnectionSummary,
-  type ConnectionTransferAssessment,
 } from '@/features/motis/routing-service';
 import { PENDLER_ALARM_API_DELAY_PREDICTIONS } from '@/utils/constants/api';
+import type {
+  ConnectionMobilityHubGroup,
+  ConnectionDelayCall,
+  ConnectionDelayPrediction,
+  ConnectionSummary,
+  ConnectionTransferAssessment,
+  ConnectionDelayDistributionBucket, ConnectionSegment
+} from './routing-service.d';
 
 type DelayPredictionResponse = {
   response?: unknown;
@@ -309,7 +311,7 @@ const buildLikelyConnection = (
   connection: ConnectionSummary,
   calls: ConnectionDelayCall[],
 ): ConnectionSummary => {
-  const delayedSegments = connection.segments.map((segment) => {
+  const delayedSegments = connection.segments.map((segment: ConnectionSegment) => {
     if (segment.productType === 'walk') {
       return segment;
     }
@@ -348,7 +350,7 @@ const buildTransferAssessments = (
   connection: ConnectionSummary,
   calls: ConnectionDelayCall[],
 ): ConnectionTransferAssessment[] => {
-  const transitSegments = connection.segments.filter((segment) => segment.productType !== 'walk');
+  const transitSegments = connection.segments.filter((segment: ConnectionSegment) => segment.productType !== 'walk');
   const callMap = new Map(calls.map((call) => [call.key, call]));
 
   return transitSegments.slice(0, -1).flatMap((segment, index) => {

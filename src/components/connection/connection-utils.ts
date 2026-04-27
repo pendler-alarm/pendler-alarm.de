@@ -3,7 +3,7 @@ import type {
   ConnectionOption,
   ConnectionProductType,
   ConnectionSegment,
-} from '@/features/motis/routing-service';
+} from '@/features/motis/routing-service.d';
 
 export type BahnBookingClass = '1' | '2';
 

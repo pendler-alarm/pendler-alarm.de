@@ -1,0 +1,40 @@
+.expand-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.expand-toggle--button {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+}
+
+.expand-toggle--plain {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.expand-toggle--emoji-only {
+  gap: 0;
+}
+
+.expand-toggle--static {
+  cursor: inherit;
+}
+
+.expand-toggle__label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.expand-toggle-target--collapsed {
+  display: none !important;
+}

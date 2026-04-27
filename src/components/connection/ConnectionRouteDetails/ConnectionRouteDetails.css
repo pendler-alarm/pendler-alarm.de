@@ -1,0 +1,190 @@
+.connection-route {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.connection-route-overview {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.connection-route-overview-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: #52525b;
+  font-size: 0.82rem;
+}
+
+.connection-route-title {
+  font-size: 0.92rem;
+  color: #7f1d1d;
+}
+
+.connection-route-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connection-route-item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.connection-route-item.expand-toggle-host--before-expanded {
+  opacity: 0.58;
+}
+
+.connection-route-track {
+  display: grid;
+  grid-template-rows: 10px 24px minmax(18px, 1fr);
+  justify-items: center;
+}
+
+.connection-route-rail {
+  width: 4px;
+  border-radius: 999px;
+  background: #be123c;
+}
+
+.connection-route-rail--hidden {
+  visibility: hidden;
+}
+
+.connection-route-item.expand-toggle-host--before-expanded .connection-route-rail {
+  background: rgba(161, 161, 170, 0.9);
+}
+
+.connection-route-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 3px solid #be123c;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+}
+
+.connection-route-item.expand-toggle-host--before-expanded .connection-route-dot {
+  border-color: rgba(161, 161, 170, 0.9);
+}
+
+.connection-route-dot-product {
+  flex: 0 0 auto;
+}
+
+.connection-route-stop-shell {
+  min-width: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.connection-route-stop-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: #27272a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.connection-route-stop-copy,
+.connection-route-stop-side,
+.connection-route-stop-details {
+  min-width: 0;
+}
+
+.connection-route-stop-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.connection-route-stop-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.connection-route-stop-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 1rem;
+}
+
+.connection-route-stop-meta {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.connection-route-offset,
+.connection-route-prediction-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.connection-route-offset {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.connection-route-prediction-button {
+  cursor: pointer;
+}
+
+.connection-route-prediction-button--good {
+  background: rgba(220, 252, 231, 0.92);
+  color: #166534;
+}
+
+.connection-route-prediction-button--warn {
+  background: rgba(254, 243, 199, 0.95);
+  color: #92400e;
+}
+
+.connection-route-prediction-button--bad {
+  background: rgba(254, 226, 226, 0.95);
+  color: #b91c1c;
+}
+
+.connection-route-prediction-button--neutral {
+  background: rgba(226, 232, 240, 0.92);
+  color: #475569;
+}
+
+@media (max-width: 720px) {
+  .connection-route-overview,
+  .connection-route-stop-trigger {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .connection-route-stop-side {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

@@ -1,0 +1,1 @@
+export type IN_OUT = 'incoming' | 'outgoing';

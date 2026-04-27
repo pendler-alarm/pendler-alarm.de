@@ -1,0 +1,69 @@
+.chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.chip--default {
+  background: rgba(255, 247, 237, 0.96);
+  color: #9a3412;
+}
+
+.chip--good {
+  background: rgba(220, 252, 231, 0.92);
+  color: #166534;
+}
+
+.chip--warn {
+  background: rgba(254, 243, 199, 0.95);
+  color: #92400e;
+}
+
+.chip--bad {
+  background: rgba(254, 226, 226, 0.95);
+  color: #b91c1c;
+}
+
+.chip--link {
+  background: rgba(255, 255, 255, 0.92);
+  color: #7c2d12;
+  border: 1px solid rgba(249, 115, 22, 0.2);
+}
+
+.chip--interactive {
+  text-decoration: none;
+}
+
+.chip__emoji {
+  line-height: 1;
+}
+
+
+.chip--gray {
+  background: rgba(15, 23, 42, 0.06);
+}
+.chip--white {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.chip--time {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  /* font-weight: bold; */
+  color: #9f1239;
+  background: rgba(255, 255, 255, 0.82);
+}
+.chip--blue {
+  color: #1d4ed8;
+  background: rgba(219, 234, 254, 0.96);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+}

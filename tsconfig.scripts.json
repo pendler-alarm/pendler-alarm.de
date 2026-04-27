@@ -1,7 +1,10 @@
 {
-  "extends": "@tsconfig/node24/tsconfig.json",
   "include": ["scripts/**/*.ts"],
   "compilerOptions": {
+    "target": "ES2022",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "types": ["node"],
