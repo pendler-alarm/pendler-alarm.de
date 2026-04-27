@@ -60,6 +60,8 @@ export const setLocale = (locale: AppLocale): void => {
 
 export const getLocale = (): AppLocale => i18n.global.locale.value as AppLocale;
 
-export const translate = (key: string, values?: Record<string, unknown>): string =>
-  i18n.global.t(key, values ?? {}) as string;
+export const translate = (key: string, values?: Record<string, unknown>): string => {
+  return i18n.global.t(key, values ?? {}) as string;
+};
+
 

@@ -1,0 +1,24 @@
+.card {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.card__title {
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.card__note {
+  margin: 0;
+  color: #52525b;
+  font-size: 0.84rem;
+}
+.card__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import Widget from '@/components/Widget.vue';
 import ActionButton from '@/components/ActionButton.vue';
 import Message from '@/components/Message.vue';
 import { hasCachedCalendarEvents } from '@/lib/calendar-events-cache';
+import { useCalendarSourceStore } from '@/features/calendar/calendar-source-store';
 import { useGoogleAuthStore } from './store';
 
 type AuthCardMode = 'login' | 'status';
@@ -17,9 +18,16 @@ const props = withDefaults(defineProps<{ mode?: AuthCardMode }>(), {
 const { t } = useI18n();
 const router = useRouter();
 const googleAuthStore = useGoogleAuthStore();
+const calendarSourceStore = useCalendarSourceStore();
 const isLoginMode = computed(() => props.mode === 'login');
 const hasCachedEvents = computed(() => hasCachedCalendarEvents());
+const icalUrlInput = ref(calendarSourceStore.normalizedIcalUrl);
+const icalErrorMessage = ref('');
 const statusLabel = computed(() => {
+  if (calendarSourceStore.mode === 'ical' && calendarSourceStore.isIcalConfigured) {
+    return t('auth.google.status.icalActive');
+  }
+
   if (!googleAuthStore.isConfigured) {
     return t('auth.google.status.notConfigured');
   }
@@ -46,8 +54,50 @@ const loginLabel = computed(() =>
   googleAuthStore.status === 'loading'
     ? t('auth.google.action.opening')
     : t('auth.google.action.connect'));
+const currentCalendarSourceLabel = computed(() => {
+  if (calendarSourceStore.mode === 'ical' && calendarSourceStore.isIcalConfigured) {
+    return t('auth.google.message.icalActive');
+  }
+
+  if (googleAuthStore.isAuthenticated) {
+    return t('auth.google.message.accessActive');
+  }
+
+  return t('auth.google.message.googleInactive');
+});
 const loadCachedEvents = (): void => {
   void router.push({ name: 'dashboard', query: { cachedEvents: '1' } });
+};
+const saveIcalSource = (): void => {
+  const normalizedUrl = icalUrlInput.value.trim();
+
+  if (!normalizedUrl) {
+    icalErrorMessage.value = t('auth.google.error.icalUrlMissing');
+    return;
+  }
+
+  try {
+    const parsedUrl = new URL(normalizedUrl);
+
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      throw new Error('invalid-protocol');
+    }
+
+    calendarSourceStore.setIcalSource(parsedUrl.toString());
+    icalUrlInput.value = parsedUrl.toString();
+    icalErrorMessage.value = '';
+    void router.push({ name: 'dashboard' });
+  } catch {
+    icalErrorMessage.value = t('auth.google.error.icalUrlInvalid');
+  }
+};
+const clearIcalSource = (): void => {
+  calendarSourceStore.clearIcalSource();
+  icalUrlInput.value = '';
+  icalErrorMessage.value = '';
+};
+const activateGoogleSource = (): void => {
+  calendarSourceStore.setGoogleMode();
 };
 </script>
 
@@ -62,11 +112,10 @@ const loadCachedEvents = (): void => {
         {{ t('auth.google.message.missingClientId') }}
       </Message>
 
-
       <template v-else-if="isLoginMode">
         <div class="auth-actions">
           <ActionButton class="button-primary" :disabled="googleAuthStore.status === 'loading'"
-            @click="googleAuthStore.signIn">
+            @click="activateGoogleSource(); googleAuthStore.signIn()">
             <template #label>{{ loginLabel }}</template>
           </ActionButton>
           <ActionButton v-if="hasCachedEvents" class="button-secondary" @click="loadCachedEvents">
@@ -80,16 +129,45 @@ const loadCachedEvents = (): void => {
       </template>
 
       <template v-else>
-        <Message v-if="googleAuthStore.isAuthenticated" variant="success">
-          {{ t('auth.google.message.accessActive') }}
+        <Message
+          v-if="googleAuthStore.isAuthenticated || (calendarSourceStore.mode === 'ical' && calendarSourceStore.isIcalConfigured)"
+          variant="success">
+          {{ currentCalendarSourceLabel }}
         </Message>
 
         <div class="auth-actions">
-          <ActionButton class="button-secondary" @click="googleAuthStore.signOut">
+          <ActionButton v-if="googleAuthStore.isAuthenticated" class="button-secondary"
+            @click="googleAuthStore.signOut">
             <template #label>{{ t('auth.google.action.logout') }}</template>
+          </ActionButton>
+          <ActionButton v-if="calendarSourceStore.isIcalConfigured" class="button-secondary" @click="clearIcalSource">
+            <template #label>{{ t('auth.google.action.removeIcal') }}</template>
           </ActionButton>
         </div>
       </template>
+
+      <div class="ical-layout">
+        <strong>{{ t('auth.google.ical.title') }}</strong>
+        <p class="scope-copy">
+          {{ t('auth.google.ical.description') }}
+        </p>
+        <label class="ical-field">
+          <span>{{ t('auth.google.ical.inputLabel') }}</span>
+          <input v-model.trim="icalUrlInput" class="ical-input" type="url"
+            :placeholder="t('auth.google.ical.placeholder')" @keydown.enter.prevent="saveIcalSource">
+        </label>
+        <div class="auth-actions">
+          <ActionButton class="button-secondary" @click="saveIcalSource">
+            <template #label>{{ t('auth.google.action.useIcal') }}</template>
+          </ActionButton>
+        </div>
+        <Message v-if="calendarSourceStore.isIcalConfigured" variant="success">
+          {{ t('auth.google.ical.activeUrl', { value: calendarSourceStore.normalizedIcalUrl }) }}
+        </Message>
+        <Message v-if="icalErrorMessage" variant="error">
+          {{ icalErrorMessage }}
+        </Message>
+      </div>
 
       <Message v-if="googleAuthStore.errorMessage" variant="error">
         {{ googleAuthStore.errorMessage }}
@@ -117,5 +195,28 @@ const loadCachedEvents = (): void => {
 .scope-copy {
   margin: 0;
   color: rgba(226, 232, 240, 0.72);
+}
+
+.ical-layout {
+  display: grid;
+  gap: 10px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.ical-field {
+  display: grid;
+  gap: 6px;
+}
+
+.ical-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.3);
 }
 </style>

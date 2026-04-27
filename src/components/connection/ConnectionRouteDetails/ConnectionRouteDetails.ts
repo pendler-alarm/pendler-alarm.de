@@ -1,8 +1,11 @@
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConnectionPrediction } from '@/components/connection/prediction/prediction';
 import type { ConnectionRouteDetailsProps } from './ConnectionRouteDetails.d';
 import type { RouteStopEntry } from '../ConnectionRouteDetail/ConnectionRouteDetail.d';
+
+type RouteSegment = ConnectionRouteDetailsProps['option']['segments'][number];
+type RouteStopViewModel = RouteStopEntry & { contentId: string };
 
 const getMinuteOffset = (value: string | null, reference: string | null): number | null => {
   if (!value || !reference) {
@@ -20,18 +23,23 @@ const getMinuteOffset = (value: string | null, reference: string | null): number
 
 export const useConnectionRouteDetails = (props: ConnectionRouteDetailsProps) => {
   const { t } = useI18n();
-  const selectedStopIndex = ref<number | null>(null);
+  const routeStopGroupId = computed(() => [
+    'connection-route',
+    props.option.departureIso ?? props.option.departureTime,
+    props.option.arrivalIso ?? props.option.arrivalTime,
+  ].join('-'));
 
-  const routeStops = computed<RouteStopEntry[]>(() => {
+  const routeStops = computed<RouteStopViewModel[]>(() => {
     if (props.option.segments.length === 0) {
       return [];
     }
 
-    const entries: RouteStopEntry[] = [];
+    const entries: RouteStopViewModel[] = [];
     const [firstSegment] = props.option.segments;
 
     if (firstSegment) {
       entries.push({
+        contentId: `connection-route-stop-${firstSegment.id}-start`,
         key: `${firstSegment.id}-start`,
         kind: 'start',
         name: firstSegment.fromStop,
@@ -43,11 +51,12 @@ export const useConnectionRouteDetails = (props: ConnectionRouteDetailsProps) =>
       });
     }
 
-    props.option.segments.forEach((segment, index) => {
+    props.option.segments.forEach((segment: RouteSegment, index: number) => {
       const nextSegment = props.option.segments[index + 1] ?? null;
       const isLast = index === props.option.segments.length - 1;
 
       entries.push({
+        contentId: `connection-route-stop-${segment.id}-end`,
         key: `${segment.id}-end`,
         kind: isLast ? 'end' : 'stop',
         name: segment.toStop,
@@ -64,16 +73,6 @@ export const useConnectionRouteDetails = (props: ConnectionRouteDetailsProps) =>
 
   const delayPrediction = computed(() => props.delayPrediction ?? null);
   const prediction = useConnectionPrediction(delayPrediction, routeStops);
-
-  const toggleStop = (index: number): void => {
-    selectedStopIndex.value = selectedStopIndex.value === index ? null : index;
-  };
-
-  const isPastStop = (index: number): boolean => (
-    selectedStopIndex.value !== null && index < selectedStopIndex.value
-  );
-
-  const isSelectedStop = (index: number): boolean => selectedStopIndex.value === index;
 
   const getOffsetLabel = (stop: RouteStopEntry): string | null => {
     if (stop.minuteOffset === null || stop.minuteOffset <= 0) {
@@ -101,12 +100,9 @@ export const useConnectionRouteDetails = (props: ConnectionRouteDetailsProps) =>
   return {
     getOffsetLabel,
     getStopMeta,
-    isPastStop,
-    isSelectedStop,
     routeStops,
-    selectedStopIndex,
+    routeStopGroupId,
     t,
-    toggleStop,
     ...prediction,
   };
 };

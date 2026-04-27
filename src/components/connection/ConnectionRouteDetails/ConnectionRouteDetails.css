@@ -40,7 +40,7 @@
   min-width: 0;
 }
 
-.connection-route-item--past {
+.connection-route-item.expand-toggle-host--before-expanded {
   opacity: 0.58;
 }
 
@@ -60,7 +60,7 @@
   visibility: hidden;
 }
 
-.connection-route-rail--muted {
+.connection-route-item.expand-toggle-host--before-expanded .connection-route-rail {
   background: rgba(161, 161, 170, 0.9);
 }
 
@@ -78,7 +78,7 @@
   overflow: hidden;
 }
 
-.connection-route-dot--muted {
+.connection-route-item.expand-toggle-host--before-expanded .connection-route-dot {
   border-color: rgba(161, 161, 170, 0.9);
 }
 

@@ -17,11 +17,11 @@
     </div>
     <div v-if="showActions" class="widget-actions">
       <slot name="actions">
-        <ActionButton>
+        <!--ActionButton>
           <template #label>
             {{ ('components.widget.api') }}
           </template>
-        </ActionButton>
+        </ActionButton-->
       </slot>
     </div>
   </section>

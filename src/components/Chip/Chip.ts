@@ -21,7 +21,9 @@ export const getConfigClassName = (type: ChipType): string => {
 export const getClassNames = (type: ChipType, isLink: boolean, additionalClassName?: string | null): string[] => {
   const configClassName = getConfigClassName(type);
   const linkClassName = isLink ? 'chip--interactive' : null;
+  // const boldClassName = getChipTypeConfig(type).bold ? 'fw-bold' : null;
   return ['chip', configClassName, linkClassName, additionalClassName].filter(Boolean) as string[];
+  // return ['chip', configClassName, linkClassName, boldClassName, additionalClassName].filter(Boolean) as string[];
 };
 export const getLinkAttributes = (link: ChipProps['link']): Record<string, string> => {
   if (!link) {
@@ -40,9 +42,6 @@ export const getChipTypeConfig = (type: ChipType): ChipTypeConfig => {
     return CHIP_TYPE_CONFIG[DEFAULT_CHIP_TYPE] as ChipTypeConfig;
   }
   return config;
-};
-export const getType = (value: ChipType | undefined): ChipType => {
-  return value && value in CHIP_TYPE_CONFIG ? value : 'default';
 };
 export const getLabel = (type: ChipType, props: ChipProps): string => {
   if (props.text) {

@@ -6,6 +6,10 @@ export const en = {
       version: 'Version',
       language: 'Language',
     },
+    navigation: {
+      about: 'About',
+      github: 'Github',
+    },
     locale: {
       de: 'DE',
       en: 'EN',
@@ -34,6 +38,7 @@ export const en = {
       status: {
         notConfigured: 'Not configured',
         active: 'Calendar access active',
+        icalActive: 'iCal access active',
         loading: 'Google OAuth running',
         error: 'Error',
         ready: 'Ready',
@@ -51,11 +56,22 @@ export const en = {
         connect: 'Connect Google Calendar',
         loadCachedEvents: 'Use latest events',
         logout: 'Sign out',
+        useIcal: 'Use iCal calendar',
+        removeIcal: 'Remove iCal',
       },
       message: {
         missingClientId: 'Add `VITE_GOOGLE_CLIENT_ID` to `.env` so login becomes available.',
         accessActive: 'OAuth access for Google Calendar is active.',
+        icalActive: 'The calendar is currently loaded via an iCal URL.',
+        googleInactive: 'There is currently no active Google session.',
         scope: `Scope: "${GOOGLE_CALENDAR_SCOPE}"`,
+      },
+      ical: {
+        title: 'Alternative via iCal',
+        description: 'Instead of Google OAuth you can also provide a public iCal URL for the calendar.',
+        inputLabel: 'iCal URL',
+        placeholder: 'https://calendar.google.com/calendar/ical/.../basic.ics',
+        activeUrl: 'Active iCal URL: {value}',
       },
       error: {
         missingClientId: 'VITE_GOOGLE_CLIENT_ID is missing in the .env file.',
@@ -63,6 +79,8 @@ export const en = {
         oauthApiUnavailable: 'Google OAuth API is not available.',
         noAccessToken: 'Google OAuth did not return an access token.',
         initFailed: 'Google login could not be initialized.',
+        icalUrlMissing: 'Please enter an iCal URL.',
+        icalUrlInvalid: 'Please enter a valid http or https iCal URL.',
       },
     },
   },
@@ -73,6 +91,8 @@ export const en = {
     },
     error: {
       loadFailed: 'Calendar events could not be loaded: {status}',
+      icalUrlMissing: 'No iCal URL configured.',
+      icalLoadFailed: 'iCal calendar could not be loaded: {reason}',
       motisFailed: 'MOTIS request failed: {status}',
       locationUnavailable: 'Current browser location is not available.',
       locationPermissionDenied: 'Location access was denied.',
@@ -112,6 +132,11 @@ export const en = {
         subTitle: 'Google Calendar',
         title: 'Your next 3 events',
         description: 'The list is loaded from your primary Google Calendar and enriched with MOTIS location and routing data.',
+        sourceLabel: 'Calendar source',
+        sources: {
+          google: 'Google Calendar OAuth',
+          ical: 'iCal URL',
+        },
         loading: 'Loading events...',
         empty: 'No upcoming events found.',
         errorFallback: 'Calendar events could not be loaded.',
@@ -254,8 +279,6 @@ export const en = {
           debugTransferRouteLink: 'Open walking route',
           deutschlandticketInfo: 'Usable with DE ticket',
           bookTrainTicket: 'Book train ticket at Deutsche Bahn',
-          showDetails: 'Show details',
-          hideDetails: 'Hide details',
         },
         settings: {
           title: 'Configuration',
@@ -401,7 +424,17 @@ export const en = {
       },
     },
     about: {
-      title: 'This is the about page',
+      kicker: '🚆 About pendler-alarm',
+      title: 'About Pendler Alarm',
+      lead: '🚉 Pendler-Alarm is a solution designed to help users reach their daily commuting connections in a calm and relaxed way.',
+      storyTitle: '📜 Our story',
+      storyBodyOne: 'We are Robert (software developer), Abdullahi (data manager at NVBW), and Johannes (train driver at Deutsche Bahn), and we came together at the Anschluss-Erreichen Hackathon 2026 to solve a challenge that affects many of us.',
+      storyBodyTwo: 'With our idea of creating an alarm for commuters and connecting it to their personal calendar, we won 4th place and a special hackathon award. 🏆',
+      visionTitle: '🔭 Our vision',
+      visionBodyOne: 'Our vision is an easy-to-use assistant for commuters and public transport users that provides a realistic departure forecast in time based on criteria such as travel history, weather, current conditions, and personal preferences.',
+      visionBodyTwo: 'It should also proactively communicate major problems on the intended connection in a simple way, so that you never miss a train again. ⏰',
+      imageAlt: 'Group photo of the Pendler Alarm team',
+      imageCredit: '© Oliver Lang for DB AG',
     },
     test: {
       title: 'Test view',
@@ -427,6 +460,9 @@ export const en = {
     widget: {
       api: 'API',
     },
-    
+    expandToggle: {
+      showDetails: 'Show details',
+      hideDetails: 'Hide details',
+    },
   },
 } as const;

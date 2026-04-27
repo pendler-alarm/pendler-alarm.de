@@ -6,6 +6,10 @@ export const de = {
       version: 'Version',
       language: 'Sprache',
     },
+    navigation: {
+      about: 'About',
+      github: 'Github',
+    },
     locale: {
       de: 'DE',
       en: 'EN',
@@ -34,6 +38,7 @@ export const de = {
       status: {
         notConfigured: 'Nicht konfiguriert',
         active: 'Calendar Zugriff aktiv',
+        icalActive: 'iCal Zugriff aktiv',
         loading: 'Google OAuth lauft',
         error: 'Fehler',
         ready: 'Bereit',
@@ -51,11 +56,22 @@ export const de = {
         connect: 'Mit Google Calendar verbinden',
         loadCachedEvents: 'Letzte Termine nutzen',
         logout: 'Abmelden',
+        useIcal: 'iCal Kalender nutzen',
+        removeIcal: 'iCal entfernen',
       },
       message: {
         missingClientId: 'Trage `VITE_GOOGLE_CLIENT_ID` in der `.env` ein, damit der Login verfugbar ist.',
         accessActive: 'Der OAuth-Zugriff fur Google Calendar ist aktiv.',
+        icalActive: 'Der Kalender wird aktuell uber eine iCal-Adresse geladen.',
+        googleInactive: 'Aktuell ist keine Google-Session aktiv.',
         scope: `Scope: "${GOOGLE_CALENDAR_SCOPE}"`,
+      },
+      ical: {
+        title: 'Alternative per iCal',
+        description: 'Du kannst statt Google OAuth auch eine offentliche iCal-Adresse fur den Kalender hinterlegen.',
+        inputLabel: 'iCal Adresse',
+        placeholder: 'https://calendar.google.com/calendar/ical/.../basic.ics',
+        activeUrl: 'Aktive iCal Adresse: {value}',
       },
       error: {
         missingClientId: 'VITE_GOOGLE_CLIENT_ID fehlt in der .env.',
@@ -63,6 +79,8 @@ export const de = {
         oauthApiUnavailable: 'Google OAuth API ist nicht verfugbar.',
         noAccessToken: 'Google OAuth hat keinen Access Token geliefert.',
         initFailed: 'Google Login konnte nicht initialisiert werden.',
+        icalUrlMissing: 'Bitte gib eine iCal-Adresse ein.',
+        icalUrlInvalid: 'Bitte gib eine gueltige http- oder https-iCal-Adresse ein.',
       },
     },
   },
@@ -73,6 +91,8 @@ export const de = {
     },
     error: {
       loadFailed: 'Kalendertermine konnten nicht geladen werden: {status}',
+      icalUrlMissing: 'Keine iCal-Adresse hinterlegt.',
+      icalLoadFailed: 'iCal Kalender konnte nicht geladen werden: {reason}',
       motisFailed: 'MOTIS-Anfrage fehlgeschlagen: {status}',
       locationUnavailable: 'Aktueller Standort ist im Browser nicht verfugbar.',
       locationPermissionDenied: 'Standortfreigabe wurde verweigert.',
@@ -112,6 +132,11 @@ export const de = {
         subTitle: 'Google Calendar',
         title: 'Deine nachsten 3 Termine',
         description: 'Die Liste wird aus deinem primaren Google Kalender geladen und mit MOTIS-Orts- und Verbindungsdaten angereichert.',
+        sourceLabel: 'Kalenderquelle',
+        sources: {
+          google: 'Google Calendar OAuth',
+          ical: 'iCal Adresse',
+        },
         loading: 'Termine werden geladen...',
         empty: 'Keine anstehenden Termine gefunden.',
         errorFallback: 'Kalendertermine konnten nicht geladen werden.',
@@ -254,8 +279,6 @@ export const de = {
           debugTransferRouteLink: 'Fußwegroute öffnen',
           deutschlandticketInfo: 'Mit DE-Ticket nutzbar',
           bookTrainTicket: 'Zugticket bei der Bahn buchen',
-          showDetails: 'Details anzeigen',
-          hideDetails: 'Details ausblenden',
         },
         settings: {
           title: 'Konfiguration',
@@ -401,7 +424,17 @@ export const de = {
       },
     },
     about: {
-      title: 'Das ist die About-Seite',
+      kicker: '🚆 Über pendler-alarm',
+      title: 'About Pendler Alarm',
+      lead: '🚉 Pendler-Alarm ist eine Lösung, die Nutzer*innen dabei helfen soll, gelassen und entspannt ihre täglichen Pendelverbindungen zu erreichen.',
+      storyTitle: '📜 Unsere Story',
+      storyBodyOne: 'Wir sind Robert (Software Developer), Abdullahi (Datenmanager bei der NVBW) und Johannes (Lokführer bei der Bahn) und haben uns beim Anschluss-Erreichen-Hackathon 2026 zusammengefunden, um eine Herausforderung zu lösen, die viele von uns betrifft.',
+      storyBodyTwo: 'Mit unserer Idee, einen Alarm für Pendler*innen zu ermöglichen und diesen mit dem eigenen Kalender zu verbinden, haben wir Platz 4 und einen Sonderpreis des Hackathons gewonnen. 🏆',
+      visionTitle: '🔭 Unsere Vision',
+      visionBodyOne: 'Unsere Vision ist ein leicht zu bedienender Helfer für Pendler*innen und Nutzer*innen des ÖPNV, der anhand verschiedener Kriterien wie Fahrthistorie, Wetter, aktueller Lage und persönlicher Präferenzen rechtzeitig eine realistische Abfahrtsprognose gibt.',
+      visionBodyTwo: 'Außerdem soll er auf einfachem, proaktivem Weg mitteilen, wenn es massive Probleme auf der gewünschten Verbindung gibt, sodass man nie wieder einen Zug verpasst. ⏰',
+      imageAlt: 'Gruppenbild des Pendler-Alarm-Teams',
+      imageCredit: '© Oliver Lang für DB AG',
     },
     test: {
       title: 'Testansicht',
@@ -427,6 +460,9 @@ export const de = {
     widget: {
       api: 'API',
     },
-    
+    expandToggle: {
+      showDetails: 'Details anzeigen',
+      hideDetails: 'Details ausblenden',
+    },
   },
 } as const;

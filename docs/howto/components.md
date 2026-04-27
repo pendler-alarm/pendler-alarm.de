@@ -91,3 +91,37 @@ This keeps implementation and tests close together and makes refactoring easier.
 - avoid leaving empty folders or unused files behind
 - refactor all affected files unless there is an explicit limitation
 - if something is intentionally skipped, document why
+
+
+## SAMPLE Code
+
+helper functions
+* `checkVisibility(props, key[])` - define when sth is visible
+* `getLabel(type, labelKey|labelKeyShort, labelProps)` - get label from type or label key with i18n support and replace placeholders with labelProps values
+* `getStyles(styles, styleConfig, extraCSS)`
+* `getValue(props, optional)` - get value from defined props with support for nested keys
+
+```vue
+<template>
+    <div :class="css" v-if="isVisible">
+        some logic: {{ someValue }}
+    </div>
+</template>
+<script src="./COMPONENT.ts" lang="ts"></script>
+```
+
+```typescript
+export default defineComponent({
+    name: 'COMPONENT',
+    props: {
+        css: { type: String, default: null },
+        value: { type: String as PropType<string | null>, default: null },
+    },
+    setup(props: ItemProps) {
+        const isVisible = computed(() => checkVisibility(props, ['value']));
+        return {
+            isVisible, // extracted logic
+        };
+    },
+});
+```

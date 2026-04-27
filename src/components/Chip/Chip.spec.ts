@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { getChipTypeConfig, getLabel, getType, getConfigClassName, toChipLabelKey, getClassNames, getLinkAttributes } from './Chip';
+import { getChipTypeConfig, getLabel, getConfigClassName, toChipLabelKey, getClassNames, getLinkAttributes } from './Chip';
 import Chip from './Chip.vue';
 import { mount } from '@vue/test-utils';
 import { createI18n } from 'vue-i18n';
@@ -187,21 +187,6 @@ describe('getChipTypeConfig()', () => {
         expect(result).toEqual({
             className: 'chip--default',
         });
-    });
-});
-describe('getType()', () => {
-    const FN = getType;
-    it('returns the input value if it is a valid chip type', () => {
-        const result = FN('good');
-        expect(result).toBe('good');
-    });
-    it('returns "default" for an invalid chip type', () => {
-        const result = FN('nonexistent');
-        expect(result).toBe('default');
-    });
-    it('returns "default" for an invalid chip type', () => {
-        const result = FN(undefined);
-        expect(result).toBe('default');
     });
 });
 describe('getLabel()', () => {

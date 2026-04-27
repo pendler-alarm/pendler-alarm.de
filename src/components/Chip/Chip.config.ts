@@ -6,7 +6,13 @@ export const CHIP_TYPE_CONFIG: CHIP_CONFIG = {
     [DEFAULT_CHIP_TYPE]: {
         className: 'chip--default',
     },
+    white: {
+        className: 'chip--white',
+    },
     good: {
+        className: 'chip--good',
+    },
+    success: {
         className: 'chip--good',
     },
     blank: {
@@ -34,6 +40,12 @@ export const CHIP_TYPE_CONFIG: CHIP_CONFIG = {
     },
     'connection-offset': {
         className: 'connection-route-offset',
+    },
+    'connection-time': {
+        className: 'chip--time',
+    },
+    'blue': {
+        className: 'chip--blue',
     },
     'connection-warn': {
         className: 'chip--warn',

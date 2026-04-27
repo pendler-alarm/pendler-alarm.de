@@ -13,6 +13,7 @@ export type ChipProps = {
   emoji?: string | null;
   labelKey?: string | null;
   className?: string | null;
+  tagName?: string | null;
   labelParams?: Record<string, unknown> | null;
   link?: ChipLink | null;
   type?: ChipType;

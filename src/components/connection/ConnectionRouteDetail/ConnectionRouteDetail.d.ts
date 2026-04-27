@@ -6,6 +6,7 @@ import type {
 } from '@/features/motis/routing-service';
 
 export type RouteStopEntry = {
+  contentId?: string;
   key: string;
   kind: 'start' | 'stop' | 'end';
   name: string;

@@ -6,15 +6,18 @@ import { useRoute, useRouter } from 'vue-router';
 import Message from '@/components/Message.vue';
 import SvgIcon from '@/components/SvgIcon/SvgIcon.vue';
 import Widget from '@/components/Widget.vue';
-import ConnectionCard from '@/components/connection/ConnectionCard.vue';
+import { useExpandToggleGroupCount } from '@/components/ExpandToggle/ExpandToggle.ts';
+import ConnectionCard from '@/components/connection/ConnectionCard/ConnectionCard.vue';
 import SharingOptionCard from '@/components/connection/SharingOptionCard.vue';
 import GoogleAuthCard from '@/features/auth/google/GoogleAuthCard.vue';
 import {
   DEFAULT_CONNECTION_BUFFER_MINUTES,
   fetchEventConnection,
+  fetchUpcomingIcalEvents,
   fetchUpcomingCalendarEvents,
   type GoogleCalendarEvent,
 } from '@/features/auth/google/calendar-api';
+import { useCalendarSourceStore } from '@/features/calendar/calendar-source-store';
 import {
   formatCoordinates,
   getCurrentResolvedLocation,
@@ -135,6 +138,7 @@ const { t, locale } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const googleAuthStore = useGoogleAuthStore();
+const calendarSourceStore = useCalendarSourceStore();
 const initialOriginPreferences = loadStoredOriginPreferences();
 const initialSharingPreferences = loadStoredSharingPreferences();
 const storedConnectionBuffers = ref<Record<string, number>>(loadStoredConnectionBuffers());
@@ -155,9 +159,19 @@ const isLoadingEvents = ref(false);
 const eventsError = ref('');
 const loadingConnectionsById = ref<Record<string, boolean>>({});
 const connectionRequestTokens = ref<Record<string, number>>({});
-const expandedConnections = ref<Set<string>>(new Set());
 const apiMetrics = ref(getApiMetrics());
 const shouldUseCachedEvents = computed(() => route.query.cachedEvents === '1');
+const hasCalendarAccess = computed(() => googleAuthStore.isAuthenticated || calendarSourceStore.isIcalConfigured);
+const activeCalendarSourceLabel = computed(() => (
+  calendarSourceStore.mode === 'ical' && calendarSourceStore.isIcalConfigured
+    ? t('views.dashboard.events.sources.ical')
+    : t('views.dashboard.events.sources.google')
+));
+const calendarAccessKey = computed(() => JSON.stringify({
+  googleAuthenticated: googleAuthStore.isAuthenticated,
+  icalMode: calendarSourceStore.mode,
+  icalUrl: calendarSourceStore.normalizedIcalUrl,
+}));
 const lastConnectionRefreshAt = ref<string | null>(null);
 const debugNotificationFeedback = ref<{
   variant: 'success' | 'error' | 'warning';
@@ -184,7 +198,7 @@ const sentReminderKeys = new Set<string>();
 const notificationIconUrl = new URL('../assets/svg/logo.svg', import.meta.url).href;
 
 const apiTotal = computed(() => apiMetrics.value.googleCalendar + apiMetrics.value.motis + apiMetrics.value.sharing);
-const expandedConnectionCount = computed(() => expandedConnections.value.size);
+const expandedConnectionCount = useExpandToggleGroupCount('dashboard-connections');
 const filteredApiHistory = computed<ApiRequestHistoryEntry[]>(() => apiMetrics.value.history.filter((entry) => {
   const matchesType = debugHistoryTypeFilter.value === 'all' || entry.type === debugHistoryTypeFilter.value;
   const matchesStatus = debugHistoryStatusFilter.value === 'all' || entry.status === debugHistoryStatusFilter.value;
@@ -922,7 +936,7 @@ const loadCurrentLocation = async (): Promise<ResolvedLocation | null> => {
 const updateOriginDependentData = async (): Promise<void> => {
   const origin = await loadCurrentLocation();
 
-  if (!googleAuthStore.isAuthenticated || !origin) {
+  if (!hasCalendarAccess.value || !origin) {
     return;
   }
 
@@ -1044,7 +1058,7 @@ const refreshSharingSuggestions = async (eventIds?: string[]): Promise<void> => 
 };
 
 const refreshConnections = async (eventIds?: string[]): Promise<void> => {
-  if (!googleAuthStore.isAuthenticated || !currentLocation.value) {
+  if (!hasCalendarAccess.value || !currentLocation.value) {
     return;
   }
 
@@ -1164,12 +1178,11 @@ const resetDashboardState = (): void => {
   currentLocationError.value = '';
   loadingConnectionsById.value = {};
   connectionRequestTokens.value = {};
-  expandedConnections.value = new Set();
   lastConnectionRefreshAt.value = null;
 };
 
 const loadEvents = async (): Promise<void> => {
-  if (!googleAuthStore.isAuthenticated || !googleAuthStore.accessToken) {
+  if (!hasCalendarAccess.value) {
     resetDashboardState();
     return;
   }
@@ -1180,7 +1193,9 @@ const loadEvents = async (): Promise<void> => {
   loadingConnectionsById.value = {};
 
   try {
-    const eventsPromise = fetchUpcomingCalendarEvents(googleAuthStore.accessToken);
+    const eventsPromise = calendarSourceStore.mode === 'ical' && calendarSourceStore.isIcalConfigured
+      ? fetchUpcomingIcalEvents(calendarSourceStore.normalizedIcalUrl)
+      : fetchUpcomingCalendarEvents(googleAuthStore.accessToken);
     const currentLocationPromise = loadCurrentLocation();
     const nextEvents = (await eventsPromise).map(applyStoredConnectionBuffer);
 
@@ -1192,10 +1207,6 @@ const loadEvents = async (): Promise<void> => {
     storeCachedCalendarEvents(nextEvents);
     isLoadingEvents.value = false;
     updateApiMetrics();
-
-    expandedConnections.value = new Set(
-      Array.from(expandedConnections.value).filter((id) => nextEvents.some((event) => event.id === id)),
-    );
 
     const origin = await currentLocationPromise;
 
@@ -1227,25 +1238,9 @@ const loadCachedEvents = (): void => {
   eventsError.value = '';
   loadingConnectionsById.value = {};
   connectionRequestTokens.value = {};
-  expandedConnections.value = new Set();
   currentLocation.value = null;
   currentLocationError.value = '';
   events.value = cachedEvents;
-};
-
-const isConnectionExpanded = (eventId: string): boolean => expandedConnections.value.has(eventId);
-
-const toggleConnection = (eventId: string): void => {
-  const next = new Set(expandedConnections.value);
-
-  if (next.has(eventId)) {
-    next.delete(eventId);
-  } else {
-    next.add(eventId);
-    void refreshConnections([eventId]);
-  }
-
-  expandedConnections.value = next;
 };
 
 onMounted(() => {
@@ -1284,9 +1279,9 @@ onBeforeUnmount(() => {
 });
 
 watch(
-  () => googleAuthStore.isAuthenticated,
-  (isAuthenticated) => {
-    if (!isAuthenticated) {
+  calendarAccessKey,
+  () => {
+    if (!hasCalendarAccess.value) {
       if (shouldUseCachedEvents.value) {
         loadCachedEvents();
         return;
@@ -1416,20 +1411,18 @@ watch(showTransferWalkNodes, () => {
       </template>
       <template #description>{{ t('views.dashboard.events.description') }}</template>
 
-      <Message
-        v-if="notificationState !== 'unsupported'"
-        class="notification-status"
-        :variant="notificationStatusVariant"
-      >
+      <Message class="notification-status" variant="success">
+        <strong>{{ t('views.dashboard.events.sourceLabel') }}</strong>
+        {{ activeCalendarSourceLabel }}
+      </Message>
+
+      <Message v-if="notificationState !== 'unsupported'" class="notification-status"
+        :variant="notificationStatusVariant">
         <strong>{{ t('views.dashboard.events.notification.title') }}</strong>
         {{ notificationStatusMessage }}
       </Message>
 
-      <Message
-        v-if="notificationState === 'granted'"
-        class="notification-system-hint"
-        variant="warning"
-      >
+      <Message v-if="notificationState === 'granted'" class="notification-system-hint" variant="warning">
         {{ t('views.dashboard.events.notification.systemHint') }}
       </Message>
 
@@ -1450,13 +1443,9 @@ watch(showTransferWalkNodes, () => {
         <div v-if="originMode === 'fixed'" class="origin-fixed-panel">
           <label class="sharing-field sharing-field--wide">
             <span>{{ t('views.dashboard.events.currentLocation.fixedInputLabel') }}</span>
-            <input
-              v-model.trim="fixedLocationInput"
-              class="sharing-input"
-              type="search"
+            <input v-model.trim="fixedLocationInput" class="sharing-input" type="search"
               :placeholder="t('views.dashboard.events.currentLocation.fixedInputPlaceholder')"
-              @keydown.enter.prevent="applyFixedLocationInput"
-            >
+              @keydown.enter.prevent="applyFixedLocationInput">
           </label>
 
           <div class="origin-fixed-actions">
@@ -1479,24 +1468,16 @@ watch(showTransferWalkNodes, () => {
 
           <label class="sharing-field sharing-field--wide">
             <span>{{ t('views.dashboard.events.currentLocation.favoriteNameLabel') }}</span>
-            <input
-              v-model.trim="favoriteNameInput"
-              class="sharing-input"
-              type="text"
-              :placeholder="t('views.dashboard.events.currentLocation.favoriteNamePlaceholder')"
-            >
+            <input v-model.trim="favoriteNameInput" class="sharing-input" type="text"
+              :placeholder="t('views.dashboard.events.currentLocation.favoriteNamePlaceholder')">
           </label>
 
           <div class="origin-fixed-actions">
             <button class="origin-action" type="button" @click="saveFavoriteLocation">
               {{ favoriteSaveLabel }}
             </button>
-            <button
-              v-if="editingFavoriteId"
-              class="origin-action origin-action--secondary"
-              type="button"
-              @click="cancelFavoriteEdit"
-            >
+            <button v-if="editingFavoriteId" class="origin-action origin-action--secondary" type="button"
+              @click="cancelFavoriteEdit">
               {{ t('views.dashboard.events.currentLocation.cancelFavorite') }}
             </button>
           </div>
@@ -1519,7 +1500,8 @@ watch(showTransferWalkNodes, () => {
                   <button class="origin-chip-action" type="button" @click="startFavoriteEdit(favorite)">
                     {{ t('views.dashboard.events.currentLocation.editFavorite') }}
                   </button>
-                  <button class="origin-chip-action origin-chip-action--danger" type="button" @click="removeFavoriteLocation(favorite.id)">
+                  <button class="origin-chip-action origin-chip-action--danger" type="button"
+                    @click="removeFavoriteLocation(favorite.id)">
                     {{ t('views.dashboard.events.currentLocation.deleteFavorite') }}
                   </button>
                 </div>
@@ -1528,7 +1510,9 @@ watch(showTransferWalkNodes, () => {
           </div>
         </div>
 
-        <span class="origin-source">{{ t('views.dashboard.events.currentLocation.locationSource', { value: currentLocationSourceLabel }) }}</span>
+        <span class="origin-source">{{ t('views.dashboard.events.currentLocation.locationSource', {
+          value:
+          currentLocationSourceLabel }) }}</span>
         <span v-if="currentLocation?.address">🏠 {{ currentLocation.address }}</span>
         <span v-if="currentLocation?.coordinates">🧭 {{ formatCoordinates(currentLocation.coordinates) }}</span>
         <span v-if="browserTrainStatusLabel">🚦 {{ browserTrainStatusLabel }}</span>
@@ -1556,11 +1540,7 @@ watch(showTransferWalkNodes, () => {
           <label class="sharing-field">
             <span>{{ t('views.dashboard.events.settings.bookingClassLabel') }}</span>
             <select v-model="bahnBookingClass" class="sharing-input">
-              <option
-                v-for="option in bahnBookingClassOptions"
-                :key="option.value"
-                :value="option.value"
-              >
+              <option v-for="option in bahnBookingClassOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
               </option>
             </select>
@@ -1568,12 +1548,8 @@ watch(showTransferWalkNodes, () => {
           <label class="sharing-field sharing-field--wide">
             <span>{{ t('views.dashboard.events.settings.travelerProfileLabel') }}</span>
             <span class="sharing-settings-hint">{{ t('views.dashboard.events.settings.travelerProfileHint') }}</span>
-            <input
-              v-model.trim="bahnTravelerProfileParam"
-              class="sharing-input"
-              type="text"
-              :placeholder="t('views.dashboard.events.settings.travelerProfilePlaceholder')"
-            >
+            <input v-model.trim="bahnTravelerProfileParam" class="sharing-input" type="text"
+              :placeholder="t('views.dashboard.events.settings.travelerProfilePlaceholder')">
           </label>
           <label class="sharing-field sharing-field--wide sharing-field--toggle">
             <span>{{ t('views.dashboard.events.settings.transferWalkLabel') }}</span>
@@ -1583,36 +1559,20 @@ watch(showTransferWalkNodes, () => {
           <label class="sharing-field">
             <span>{{ t('views.dashboard.events.sharing.providerLabel') }}</span>
             <select v-model="sharingProviderId" class="sharing-input">
-              <option
-                v-for="provider in sharingProviderOptions"
-                :key="provider.value"
-                :value="provider.value"
-              >
+              <option v-for="provider in sharingProviderOptions" :key="provider.value" :value="provider.value">
                 {{ provider.label }}
               </option>
             </select>
           </label>
           <label class="sharing-field">
             <span>{{ t('views.dashboard.events.sharing.distanceLabel') }}</span>
-            <input
-              v-model.number="sharingShortTripDistanceKm"
-              class="sharing-input"
-              type="number"
-              min="0.5"
-              max="25"
-              step="0.5"
-            >
+            <input v-model.number="sharingShortTripDistanceKm" class="sharing-input" type="number" min="0.5" max="25"
+              step="0.5">
           </label>
           <label class="sharing-field">
             <span>{{ t('views.dashboard.events.sharing.radiusLabel') }}</span>
-            <input
-              v-model.number="sharingStationSearchRadiusMeters"
-              class="sharing-input"
-              type="number"
-              min="200"
-              max="5000"
-              step="100"
-            >
+            <input v-model.number="sharingStationSearchRadiusMeters" class="sharing-input" type="number" min="200"
+              max="5000" step="100">
           </label>
           <label v-if="isCustomSharingProvider" class="sharing-field">
             <span>{{ t('views.dashboard.events.sharing.customProviderLabel') }}</span>
@@ -1620,12 +1580,8 @@ watch(showTransferWalkNodes, () => {
           </label>
           <label v-if="isCustomSharingProvider" class="sharing-field sharing-field--wide">
             <span>{{ t('views.dashboard.events.sharing.customFeedLabel') }}</span>
-            <input
-              v-model.trim="sharingCustomGbfsUrl"
-              class="sharing-input"
-              type="url"
-              :placeholder="t('views.dashboard.events.sharing.customFeedPlaceholder')"
-            >
+            <input v-model.trim="sharingCustomGbfsUrl" class="sharing-input" type="url"
+              :placeholder="t('views.dashboard.events.sharing.customFeedPlaceholder')">
           </label>
         </div>
       </details>
@@ -1666,30 +1622,19 @@ watch(showTransferWalkNodes, () => {
           <p v-if="isConnectionLoading(event.id) && !event.connection" class="event-meta event-meta--muted">
             🚆 {{ t('views.dashboard.events.connection.loading') }}
           </p>
-          <ConnectionCard
-            v-else-if="event.connection"
-            :connection="event.connection"
-            :event-id="event.id"
-            :event-start-iso="event.startIso"
-            :last-updated-iso="event.connectionFetchedAt"
-            :expanded="isConnectionExpanded(event.id)"
+          <ConnectionCard v-else-if="event.connection" :connection="event.connection" :event-id="event.id"
+            :event-start-iso="event.startIso" :last-updated-iso="event.connectionFetchedAt"
             :sharing-suggestion="event.sharingSuggestion"
-            :deutschlandticket-enabled="deutschlandticketEnabled"
-            :origin-address="currentLocation?.address ?? null"
+            :deutschlandticket-enabled="deutschlandticketEnabled" :origin-address="currentLocation?.address ?? null"
             :destination-address="event.locationAddress"
-            @toggle="toggleConnection(event.id)"
-            @update-buffer="updateConnectionBuffer(event.id, $event)"
-          />
+            @toggle="$event ? refreshConnections([event.id]) : undefined" @update-buffer="updateConnectionBuffer(event.id, $event)" />
 
           <p v-else-if="event.connectionError" class="event-meta event-meta--muted">
             🚫 {{ event.connectionError }}
           </p>
 
-          <SharingOptionCard
-            v-if="event.sharingSuggestion && !event.connection"
-            :suggestion="event.sharingSuggestion"
-            :compact="true"
-          />
+          <SharingOptionCard v-if="event.sharingSuggestion && !event.connection" :suggestion="event.sharingSuggestion"
+            :compact="true" />
 
           <p v-if="event.sharingError" class="event-meta event-meta--muted">
             🚲 {{ event.sharingError }}
@@ -1704,11 +1649,8 @@ watch(showTransferWalkNodes, () => {
             <span class="debug-bubble">{{ apiTotal }}</span>
           </summary>
           <div class="debug-body">
-            <Message
-              v-if="debugNotificationFeedback"
-              class="debug-feedback"
-              :variant="debugNotificationFeedback.variant"
-            >
+            <Message v-if="debugNotificationFeedback" class="debug-feedback"
+              :variant="debugNotificationFeedback.variant">
               {{ debugNotificationFeedback.message }}
             </Message>
             <div class="debug-row">
@@ -1728,18 +1670,11 @@ watch(showTransferWalkNodes, () => {
             </div>
 
             <div class="debug-actions">
-              <button
-                class="debug-action"
-                :disabled="events.length === 0"
-                @click="triggerDebugNotification"
-              >
+              <button class="debug-action" :disabled="events.length === 0" @click="triggerDebugNotification">
                 {{ t('views.dashboard.events.debug.triggerFirstEventNotification') }}
               </button>
-              <button
-                class="debug-action debug-action--secondary"
-                :disabled="apiMetrics.history.length === 0"
-                @click="clearDebugHistory"
-              >
+              <button class="debug-action debug-action--secondary" :disabled="apiMetrics.history.length === 0"
+                @click="clearDebugHistory">
                 {{ t('views.dashboard.events.debug.clearHistory') }}
               </button>
             </div>
@@ -1765,12 +1700,8 @@ watch(showTransferWalkNodes, () => {
               </label>
               <label class="debug-filter-field debug-filter-field--wide">
                 <span>{{ t('views.dashboard.events.debug.filters.search') }}</span>
-                <input
-                  v-model.trim="debugHistoryQuery"
-                  class="debug-filter-input"
-                  type="search"
-                  :placeholder="t('views.dashboard.events.debug.filters.searchPlaceholder')"
-                >
+                <input v-model.trim="debugHistoryQuery" class="debug-filter-input" type="search"
+                  :placeholder="t('views.dashboard.events.debug.filters.searchPlaceholder')">
               </label>
             </div>
 
@@ -1793,15 +1724,20 @@ watch(showTransferWalkNodes, () => {
                   <div class="debug-history-item-meta">
                     <span>{{ formatTimestamp(entry.startedAtIso) }}</span>
                     <span>{{ formatDurationMs(entry.durationMs) }}</span>
-                    <span v-if="entry.statusCode !== null">{{ t('views.dashboard.events.debug.history.httpStatus', { status: entry.statusCode }) }}</span>
+                    <span v-if="entry.statusCode !== null">{{ t('views.dashboard.events.debug.history.httpStatus', {
+                      status:
+                      entry.statusCode }) }}</span>
                     <span v-if="entry.payload?.cacheHit" class="debug-history-chip debug-history-chip--cache">
                       {{ t('views.dashboard.events.debug.history.cacheHit') }}
                     </span>
-                    <span v-if="entry.payload?.errorKind" class="debug-history-chip">{{ entry.payload.errorKind }}</span>
+                    <span v-if="entry.payload?.errorKind" class="debug-history-chip">{{ entry.payload.errorKind
+                      }}</span>
                   </div>
                   <p v-if="entry.payload?.note" class="debug-history-note">{{ entry.payload.note }}</p>
                   <details v-if="entry.payload" class="debug-history-json">
-                    <summary class="debug-history-json-summary">{{ t('views.dashboard.events.debug.history.showRequestJson') }}</summary>
+                    <summary class="debug-history-json-summary">{{
+                      t('views.dashboard.events.debug.history.showRequestJson')
+                      }}</summary>
                     <pre class="debug-json-pre debug-json-pre--entry">{{ getDebugEntryJson(entry) }}</pre>
                   </details>
                 </li>

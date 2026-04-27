@@ -1,9 +1,8 @@
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
   buildStationInfoUrl,
   formatConnectionServiceLabel,
-  formatDelayMinutes,
   formatDistanceMeters,
   formatProbability,
   getStationInfoProviderLabel,
@@ -12,36 +11,32 @@ import type { ChipLink } from '@/components/Chip/Chip.d';
 import { getDistanceMeters } from '@/features/sharing/sharing-service';
 import type { Coordinates } from '@/features/motis/location-service';
 import type {
-  ConnectionDelayCall,
   ConnectionMobilityHubGroup,
   MobilityHubParkingSite,
   MobilityHubSharingStation,
 } from '@/features/motis/routing-service.d';
 import type { ConnectionRouteDetailProps, DetailTone } from './ConnectionRouteDetail.d';
 
-type DelayBand = {
-  key: string;
-  label: string;
-  probability: number;
-  tone: Exclude<DetailTone, 'neutral'>;
-};
-
 type SharingCategory = {
+  contentId: string;
   id: 'car' | 'bike' | 'scooter';
   title: string;
   icon: string;
-  stations: MobilityHubSharingStation[];
+  overflowStations: MobilityHubSharingStation[];
+  previewStations: MobilityHubSharingStation[];
 };
 
 type ParkingCategory = {
+  contentId: string;
   id: 'bike' | 'car';
   title: string;
-  sites: MobilityHubParkingSite[];
+  overflowSites: MobilityHubParkingSite[];
+  previewSites: MobilityHubParkingSite[];
 };
 
 export const normalizeComparableText = (value: string): string => value
   .toLowerCase()
-  .replaceAll(/[^\p{L}\p{N}]+/gu, '')
+  .replace(/[^\p{L}\p{N}]+/gu, '')
   .trim();
 
 const dedupeAddressParts = (address: string): string => {
@@ -85,23 +80,31 @@ export const normalizeOperatorLabel = (operator: string | null, fallback: string
   }
 
   const normalized = operator
-    .replaceAll(/[_-]+/gu, ' ')
-    .replaceAll(/\s+/gu, ' ')
+    .replace(/[_-]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
     .trim();
   return normalized
     .split(' ')
-    .map((token) => token ? `${token.charAt(0).toUpperCase()}${token.slice(1)}` : token)
+    .map((token: string) => token ? `${token.charAt(0).toUpperCase()}${token.slice(1)}` : token)
     .join(' ');
 };
 
 const toSortedByDistance = <T>(items: T[], getDistanceKm: (item: T) => number | null): T[] => (
   [...items].sort((left, right) => (getDistanceKm(left) ?? Number.POSITIVE_INFINITY) - (getDistanceKm(right) ?? Number.POSITIVE_INFINITY))
 );
+const toPreviewStations = (stations: MobilityHubSharingStation[]) => ({
+  overflowStations: stations.slice(3),
+  previewStations: stations.slice(0, 3),
+});
+const toPreviewSites = (sites: MobilityHubParkingSite[]) => ({
+  overflowSites: sites.slice(3),
+  previewSites: sites.slice(0, 3),
+});
 
 export const useConnectionRouteDetail = (props: ConnectionRouteDetailProps) => {
   const { t } = useI18n();
-  const expandedMobilityGroups = ref<Record<string, boolean>>({});
 
+  // adress at start and end
   const stopAddress = computed(() => {
     const isSameAsStopName = (address: string): boolean => (
       normalizeComparableText(address) === normalizeComparableText(props.stop.name)
@@ -251,6 +254,23 @@ export const useConnectionRouteDetail = (props: ConnectionRouteDetailProps) => {
 
   const missedProbabilityLabel = computed(() => formatProbability(props.transferAssessment?.missedProbability ?? null));
 
+  const transferStationChangeLabel = computed(() => (
+    hasStationChange.value ? t('views.dashboard.events.connection.transferStationChange') : null
+  ));
+
+  const transferWalkSummary = computed(() => {
+    if (!hasStationChange.value) {
+      return null;
+    }
+
+    return t('views.dashboard.events.connection.transferWalkSummary', {
+      from: props.stop.incomingSegment?.toStop ?? props.stop.name,
+      to: props.stop.outgoingSegment?.productType === 'walk'
+        ? props.stop.outgoingSegment.toStop
+        : props.stop.outgoingSegment?.fromStop ?? props.stop.name,
+    });
+  });
+
   const getStationLink = (stopName: string, stopId?: string | null): string => buildStationInfoUrl(stopName, stopId);
 
   const getStationProvider = (stopName: string, stopId?: string | null): string => getStationInfoProviderLabel(stopName, stopId);
@@ -293,66 +313,6 @@ export const useConnectionRouteDetail = (props: ConnectionRouteDetailProps) => {
       text: t('views.dashboard.events.connection.debugTransferRouteLink'),
     };
   });
-
-  const getDelayTone = (delayMinutes: number | null): DetailTone => {
-    if (delayMinutes === null) {
-      return 'neutral';
-    }
-
-    if (delayMinutes <= 0) {
-      return 'good';
-    }
-
-    if (delayMinutes <= 5) {
-      return 'warn';
-    }
-
-    return 'bad';
-  };
-
-  const getDelayBands = (call: ConnectionDelayCall): DelayBand[] => {
-    const definitions = [
-      {
-        key: 'on-time',
-        label: t('views.dashboard.events.connection.delayBandOnTime'),
-        tone: 'good' as const,
-        predicate: (delay: number) => delay <= 0,
-      },
-      {
-        key: 'short',
-        label: t('views.dashboard.events.connection.delayBandShort'),
-        tone: 'warn' as const,
-        predicate: (delay: number) => delay >= 1 && delay <= 2,
-      },
-      {
-        key: 'medium',
-        label: t('views.dashboard.events.connection.delayBandMedium'),
-        tone: 'warn' as const,
-        predicate: (delay: number) => delay >= 3 && delay <= 5,
-      },
-      {
-        key: 'long',
-        label: t('views.dashboard.events.connection.delayBandLong'),
-        tone: 'bad' as const,
-        predicate: (delay: number) => delay >= 6 && delay <= 10,
-      },
-      {
-        key: 'severe',
-        label: t('views.dashboard.events.connection.delayBandSevere'),
-        tone: 'bad' as const,
-        predicate: (delay: number) => delay >= 11,
-      },
-    ];
-
-    return definitions.map((definition) => ({
-      key: definition.key,
-      label: definition.label,
-      tone: definition.tone,
-      probability: call.distribution
-        .filter((bucket) => definition.predicate(bucket.delayMinutes))
-        .reduce((total, bucket) => total + bucket.probability, 0),
-    }));
-  };
 
   const getPurposeLabel = (purpose: string | null): string => {
     switch (purpose?.toUpperCase()) {
@@ -453,26 +413,29 @@ export const useConnectionRouteDetail = (props: ConnectionRouteDetailProps) => {
 
     const base = [
       {
+        contentId: `sharing-${props.stop.key}-car`,
         id: 'car' as const,
         title: t('views.dashboard.events.connection.mobility.carsharing'),
         icon: 'material/directions_car',
-        stations: toSortedByDistance(grouped.car, getStationDistanceKm),
+        ...toPreviewStations(toSortedByDistance(grouped.car, getStationDistanceKm)),
       },
       {
+        contentId: `sharing-${props.stop.key}-bike`,
         id: 'bike' as const,
         title: t('views.dashboard.events.connection.mobility.bikesharing'),
         icon: 'material/directions_bike',
-        stations: toSortedByDistance(grouped.bike, getStationDistanceKm),
+        ...toPreviewStations(toSortedByDistance(grouped.bike, getStationDistanceKm)),
       },
       {
+        contentId: `sharing-${props.stop.key}-scooter`,
         id: 'scooter' as const,
         title: t('views.dashboard.events.connection.mobility.scootersharing'),
         icon: 'material/electric_scooter',
-        stations: toSortedByDistance(grouped.scooter, getStationDistanceKm),
+        ...toPreviewStations(toSortedByDistance(grouped.scooter, getStationDistanceKm)),
       },
     ];
 
-    return base.filter((entry) => entry.stations.length > 0);
+    return base.filter((entry) => entry.previewStations.length > 0);
   });
 
   const parkingCategories = computed<ParkingCategory[]>(() => {
@@ -487,27 +450,20 @@ export const useConnectionRouteDetail = (props: ConnectionRouteDetailProps) => {
     );
 
     return [
-      { id: 'bike' as const, title: t('views.dashboard.events.connection.mobility.bicycleParking'), sites: bikeSites },
-      { id: 'car' as const, title: t('views.dashboard.events.connection.mobility.carParking'), sites: carSites },
-    ].filter((entry) => entry.sites.length > 0);
+      {
+        contentId: `parking-${props.stop.key}-bike`,
+        id: 'bike' as const,
+        title: t('views.dashboard.events.connection.mobility.bicycleParking'),
+        ...toPreviewSites(bikeSites),
+      },
+      {
+        contentId: `parking-${props.stop.key}-car`,
+        id: 'car' as const,
+        title: t('views.dashboard.events.connection.mobility.carParking'),
+        ...toPreviewSites(carSites),
+      },
+    ].filter((entry) => entry.previewSites.length > 0);
   });
-
-  const getMobilityMoreKey = (section: 'sharing' | 'parking', category: string): string => (
-    `${props.stop.key}-${section}-${category}`
-  );
-
-  const isMobilityExpanded = (key: string): boolean => expandedMobilityGroups.value[key] === true;
-
-  const toggleMobilityExpanded = (key: string): void => {
-    expandedMobilityGroups.value = {
-      ...expandedMobilityGroups.value,
-      [key]: !isMobilityExpanded(key),
-    };
-  };
-
-  const getVisibleItems = <T>(items: T[], key: string): T[] => (
-    isMobilityExpanded(key) ? items : items.slice(0, 3)
-  );
 
   const getSharingDistanceLabel = (station: MobilityHubSharingStation): string => (
     formatDistanceKilometers(getStationDistanceKm(station) ?? 0)
@@ -519,19 +475,13 @@ export const useConnectionRouteDetail = (props: ConnectionRouteDetailProps) => {
 
   return {
     formatConnectionServiceLabel,
-    formatDelayMinutes,
     formatProbability,
-    getDelayBands,
-    getDelayTone,
-    getMobilityMoreKey,
     getParkingDistanceLabel,
     getPurposeLabel,
     getSharingDistanceLabel,
-    getVisibleItems,
     hasStationChange,
     hasStopMobilityHubData,
     incomingStationLink,
-    isMobilityExpanded,
     missedProbabilityLabel,
     normalizeOperatorLabel: (operator: string | null) => normalizeOperatorLabel(
       operator,
@@ -545,12 +495,13 @@ export const useConnectionRouteDetail = (props: ConnectionRouteDetailProps) => {
     stopAddress,
     stopMobilityHubGroup,
     t,
-    toggleMobilityExpanded,
     transferDistanceLabel,
     transferFeasibilityLabel,
     transferLabel,
     transferRouteLink,
+    transferStationChangeLabel,
     transferRouteUrl,
     transferTone,
+    transferWalkSummary,
   };
 };

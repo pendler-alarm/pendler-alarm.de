@@ -48,3 +48,22 @@
 .chip--gray {
   background: rgba(15, 23, 42, 0.06);
 }
+.chip--white {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.chip--time {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  /* font-weight: bold; */
+  color: #9f1239;
+  background: rgba(255, 255, 255, 0.82);
+}
+.chip--blue {
+  color: #1d4ed8;
+  background: rgba(219, 234, 254, 0.96);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+}

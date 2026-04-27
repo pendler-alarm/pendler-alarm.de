@@ -1,3 +1,7 @@
-.item--meta {
-    
+.item--inline {
+    display: inline-flex;
+}
+
+.item--bold span{
+    font-weight: bold;
 }

@@ -1,0 +1,38 @@
+.transfer-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.transfer-card--good {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.transfer-card--warn {
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.transfer-card--bad {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.transfer-card__title,
+.transfer-card__summary {
+  margin: 0;
+  color: #52525b;
+  font-size: 0.84rem;
+}
+
+.transfer-card__title {
+  font-weight: 600;
+}
+
+.transfer-card__extras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
