@@ -7,6 +7,7 @@ export const de = {
       language: 'Sprache',
     },
     navigation: {
+      dashboard: 'Dashboard',
       about: 'About',
       github: 'Github',
     },
@@ -65,12 +66,15 @@ export const de = {
         icalActive: 'Der Kalender wird aktuell uber eine iCal-Adresse geladen.',
         googleInactive: 'Aktuell ist keine Google-Session aktiv.',
         scope: `Scope: "${GOOGLE_CALENDAR_SCOPE}"`,
+        cookieHint: 'Beim Klick auf den Google-Calendar-Button konnen Google-bezogene Cookies oder vergleichbare Browser-Daten geladen werden.',
       },
       ical: {
         title: 'Alternative per iCal',
         description: 'Du kannst statt Google OAuth auch eine offentliche iCal-Adresse fur den Kalender hinterlegen.',
         inputLabel: 'iCal Adresse',
         placeholder: 'https://willi84.github.io/pendler-api/calendar.ics',
+        exampleUrl: 'https://willi84.github.io/pendler-api/calendar.ics',
+        useExample: 'Beispiel-URL ins Feld laden',
         activeUrl: 'Aktive iCal Adresse: {value}',
       },
       error: {
@@ -121,6 +125,7 @@ export const de = {
     home: {
       title: 'pendler-alarm.de',
       description: 'Dein Kalender zwischen Gleis und Alltag.',
+      prototypeNotice: 'Status: Diese Anwendung ist aktuell ein Prototyp.',
     },
     dashboard: {
       hero: {
@@ -418,6 +423,13 @@ export const de = {
       visionTitle: '🔭 Unsere Vision',
       visionBodyOne: 'Unsere Vision ist ein leicht zu bedienender Helfer für Pendler*innen und Nutzer*innen des ÖPNV, der anhand verschiedener Kriterien wie Fahrthistorie, Wetter, aktueller Lage und persönlicher Präferenzen rechtzeitig eine realistische Abfahrtsprognose gibt.',
       visionBodyTwo: 'Außerdem soll er auf einfachem, proaktivem Weg mitteilen, wenn es massive Probleme auf der gewünschten Verbindung gibt, sodass man nie wieder einen Zug verpasst. ⏰',
+      prototypeTitle: 'Prototyp Status',
+      prototypeBody: 'Pendler Alarm ist aktuell ein Prototyp. Funktionen, Inhalte und technische Details konnen sich kurzfristig andern.',
+      legalTitle: 'Impressum und Datenschutz',
+      contactNotice: 'Du kannst uns unter info[at]pendler-alarm.de kontaktieren.',
+      operatorNotice: 'Die Domain pendler-alarm.de wird von Robert Willemelis betrieben.',
+      privacyCookiesNotice: 'Aktuell werden keine Cookies geladen, ausser wenn du den Google-Calendar-Button aktiv nutzt.',
+      privacyStorageNotice: 'Einige Einstellungen und Kalenderangaben werden fur die Nutzung lokal im localStorage deines Browsers zwischengespeichert.',
       imageAlt: 'Gruppenbild des Pendler-Alarm-Teams',
       imageCredit: '© Oliver Lang für DB AG',
     },

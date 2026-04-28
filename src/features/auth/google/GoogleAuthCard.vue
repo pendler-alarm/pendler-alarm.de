@@ -23,6 +23,7 @@ const isLoginMode = computed(() => props.mode === 'login');
 const hasCachedEvents = computed(() => hasCachedCalendarEvents());
 const icalUrlInput = ref(calendarSourceStore.normalizedIcalUrl);
 const icalErrorMessage = ref('');
+const exampleIcalUrl = computed(() => t('auth.google.ical.exampleUrl'));
 const statusLabel = computed(() => {
   if (calendarSourceStore.mode === 'ical' && calendarSourceStore.isIcalConfigured) {
     return t('auth.google.status.icalActive');
@@ -99,6 +100,10 @@ const clearIcalSource = (): void => {
 const activateGoogleSource = (): void => {
   calendarSourceStore.setGoogleMode();
 };
+const useExampleIcalUrl = (): void => {
+  icalUrlInput.value = exampleIcalUrl.value;
+  icalErrorMessage.value = '';
+};
 </script>
 
 <template>
@@ -125,6 +130,9 @@ const activateGoogleSource = (): void => {
 
         <p class="scope-copy">
           {{ t('auth.google.message.scope') }}
+        </p>
+        <p class="helper-copy">
+          {{ t('auth.google.message.cookieHint') }}
         </p>
       </template>
 
@@ -156,6 +164,9 @@ const activateGoogleSource = (): void => {
           <input v-model.trim="icalUrlInput" class="ical-input" type="url"
             :placeholder="t('auth.google.ical.placeholder')" @keydown.enter.prevent="saveIcalSource">
         </label>
+        <button type="button" class="text-action" @click="useExampleIcalUrl">
+          {{ t('auth.google.ical.useExample') }}
+        </button>
         <div class="auth-actions">
           <ActionButton class="button-secondary" @click="saveIcalSource">
             <template #label>{{ t('auth.google.action.useIcal') }}</template>
@@ -197,6 +208,12 @@ const activateGoogleSource = (): void => {
   color: rgba(226, 232, 240, 0.72);
 }
 
+.helper-copy {
+  margin: -4px 0 0;
+  font-size: 0.85rem;
+  color: rgba(226, 232, 240, 0.62);
+}
+
 .ical-layout {
   display: grid;
   gap: 10px;
@@ -218,5 +235,18 @@ const activateGoogleSource = (): void => {
   font: inherit;
   color: #f8fafc;
   background: rgba(15, 23, 42, 0.3);
+}
+
+.text-action {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #93c5fd;
+  font: inherit;
+  font-size: 0.92rem;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+  cursor: pointer;
 }
 </style>

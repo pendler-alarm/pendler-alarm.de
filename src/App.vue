@@ -91,6 +91,7 @@ onBeforeUnmount(() => {
         <span class="train-presence-pill" :class="trainPresenceClassName">{{ trainPresenceMessage }}</span>
         <span v-if="trainPresenceProvider" class="service-worker-banner__version">{{ trainPresenceProvider }}</span>
         <span class="service-worker-banner__version">{{ t('app.footer.version') }} {{ activeWorkerVersion }}</span>
+        <RouterLink class="service-worker-banner__link" to="/dashboard">{{ t('app.navigation.dashboard') }}</RouterLink>
         <RouterLink class="service-worker-banner__link" to="/about">{{ t('app.navigation.about') }}</RouterLink>
         <a target="_blank" href="https://github.com/pendler-alarm/pendler-alarm.de"
           class="service-worker-banner__link">{{

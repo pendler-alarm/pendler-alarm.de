@@ -7,6 +7,7 @@ export const en = {
       language: 'Language',
     },
     navigation: {
+      dashboard: 'Dashboard',
       about: 'About',
       github: 'Github',
     },
@@ -65,12 +66,15 @@ export const en = {
         icalActive: 'The calendar is currently loaded via an iCal URL.',
         googleInactive: 'There is currently no active Google session.',
         scope: `Scope: "${GOOGLE_CALENDAR_SCOPE}"`,
+        cookieHint: 'Clicking the Google Calendar button may load Google-related cookies or similar browser data.',
       },
       ical: {
         title: 'Alternative via iCal',
         description: 'Instead of Google OAuth you can also provide a public iCal URL for the calendar.',
         inputLabel: 'iCal URL',
         placeholder: 'https://willi84.github.io/pendler-api/calendar.ics',
+        exampleUrl: 'https://willi84.github.io/pendler-api/calendar.ics',
+        useExample: 'Load example URL into the field',
         activeUrl: 'Active iCal URL: {value}',
       },
       error: {
@@ -121,6 +125,7 @@ export const en = {
     home: {
       title: 'pendler-alarm.de',
       description: 'Your calendar between platform and everyday life.',
+      prototypeNotice: 'Status: This application is currently a prototype.',
     },
     dashboard: {
       hero: {
@@ -418,6 +423,13 @@ export const en = {
       visionTitle: '🔭 Our vision',
       visionBodyOne: 'Our vision is an easy-to-use assistant for commuters and public transport users that provides a realistic departure forecast in time based on criteria such as travel history, weather, current conditions, and personal preferences.',
       visionBodyTwo: 'It should also proactively communicate major problems on the intended connection in a simple way, so that you never miss a train again. ⏰',
+      prototypeTitle: 'Prototype status',
+      prototypeBody: 'Pendler Alarm is currently a prototype. Features, content, and technical details may change at short notice.',
+      legalTitle: 'Imprint and privacy',
+      contactNotice: 'You can contact us at info[at]pendler-alarm.de.',
+      operatorNotice: 'The domain pendler-alarm.de is operated by Robert Willemelis.',
+      privacyCookiesNotice: 'No cookies are currently loaded unless you actively use the Google Calendar button.',
+      privacyStorageNotice: 'Some settings and calendar data are temporarily stored locally in your browser localStorage for usage.',
       imageAlt: 'Group photo of the Pendler Alarm team',
       imageCredit: '© Oliver Lang for DB AG',
     },

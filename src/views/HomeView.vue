@@ -3,6 +3,7 @@ import { watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import Widget from '@/components/Widget.vue';
+import Message from '@/components/Message.vue';
 import { useCalendarSourceStore } from '@/features/calendar/calendar-source-store';
 import GoogleAuthCard from '@/features/auth/google/GoogleAuthCard.vue';
 import { useGoogleAuthStore } from '@/features/auth/google/store';
@@ -25,6 +26,10 @@ watch(
 
 <template>
   <div class="home">
+    <Message variant="warning">
+      {{ t('views.home.prototypeNotice') }}
+    </Message>
+
     <Widget>
       <template #icon>{{ t('app.logo') }}</template>
       <template #title>{{ t('views.home.title') }}</template>
@@ -40,6 +45,8 @@ watch(
   max-width: 860px;
   margin: 0 auto;
   padding: 32px 20px 64px;
+  display: grid;
+  gap: 20px;
 }
 
 @media (max-width: 720px) {

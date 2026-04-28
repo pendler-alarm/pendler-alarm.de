@@ -32,6 +32,19 @@ const groupImageUrl = 'https://data.deutschebahn.com/resource/blob/13778206/8091
         <p>{{ t('views.about.visionBodyOne') }}</p>
         <p>{{ t('views.about.visionBodyTwo') }}</p>
       </article>
+
+      <article class="about-card">
+        <h2>{{ t('views.about.prototypeTitle') }}</h2>
+        <p>{{ t('views.about.prototypeBody') }}</p>
+      </article>
+
+      <article class="about-card">
+        <h2>{{ t('views.about.legalTitle') }}</h2>
+        <p>{{ t('views.about.contactNotice') }}</p>
+        <p>{{ t('views.about.operatorNotice') }}</p>
+        <p>{{ t('views.about.privacyCookiesNotice') }}</p>
+        <p>{{ t('views.about.privacyStorageNotice') }}</p>
+      </article>
     </div>
   </section>
 </template>
