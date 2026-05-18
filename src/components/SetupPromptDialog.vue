@@ -31,7 +31,8 @@ const showInstallPanel = computed(() =>
 );
 
 const showNotificationPanel = computed(() =>
-  isStandalone.value
+  !isStandalone.value
+    && hasVisitedBefore.value
     && notificationState.value !== 'granted'
     && notificationState.value !== 'unsupported',
 );
@@ -44,7 +45,17 @@ const updateStandalone = (): void => {
   if (typeof window === 'undefined') return;
   const nav = window.navigator as Navigator & { standalone?: boolean };
   // eslint-disable-next-line local-i18n/no-hardcoded-text
-  isStandalone.value = window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true;
+  isStandalone.value = nav.standalone === true
+    // eslint-disable-next-line local-i18n/no-hardcoded-text
+    || document.referrer.startsWith('android-app://')
+    // eslint-disable-next-line local-i18n/no-hardcoded-text
+    || window.matchMedia('(display-mode: standalone)').matches
+    // eslint-disable-next-line local-i18n/no-hardcoded-text
+    || window.matchMedia('(display-mode: fullscreen)').matches
+    // eslint-disable-next-line local-i18n/no-hardcoded-text
+    || window.matchMedia('(display-mode: minimal-ui)').matches
+    // eslint-disable-next-line local-i18n/no-hardcoded-text
+    || window.matchMedia('(display-mode: window-controls-overlay)').matches;
 };
 
 const detectInstallHelpMode = (): void => {
@@ -146,6 +157,7 @@ const onBeforeInstallPrompt = (event: Event): void => {
   event.preventDefault();
   deferredPrompt.value = event as InstallPromptEvent;
   installHelpMode.value = 'prompt';
+  dismissed.value = false;
 };
 
 const onInstalled = (): void => {
