@@ -1,0 +1,21 @@
+<svg width="1600" height="1600" viewBox="0 0 1600 1600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="1600" rx="148" fill="#07B800"/>
+  <path d="M800 160V800H1450C1411 538 1308 364 1119 252C1012 188 900 168 800 160Z" fill="#72E85D"/>
+
+  <rect x="780" y="160" width="40" height="120" rx="20" fill="white"/>
+  <rect x="1077" y="239" width="40" height="120" rx="20" transform="rotate(28 1077 239)" fill="white"/>
+  <rect x="1274" y="492" width="40" height="120" rx="20" transform="rotate(55 1274 492)" fill="white"/>
+  <rect x="1340" y="780" width="40" height="120" rx="20" transform="rotate(90 1340 780)" fill="white"/>
+  <rect x="1244" y="1134" width="40" height="120" rx="20" transform="rotate(120 1244 1134)" fill="white"/>
+  <rect x="1077" y="1312" width="40" height="120" rx="20" transform="rotate(152 1077 1312)" fill="white"/>
+  <rect x="780" y="1340" width="40" height="120" rx="20" fill="white"/>
+  <rect x="483" y="1312" width="40" height="120" rx="20" transform="rotate(-152 483 1312)" fill="white"/>
+  <rect x="316" y="1134" width="40" height="120" rx="20" transform="rotate(-120 316 1134)" fill="white"/>
+  <rect x="220" y="780" width="40" height="120" rx="20" transform="rotate(-90 220 780)" fill="white"/>
+  <rect x="286" y="492" width="40" height="120" rx="20" transform="rotate(-55 286 492)" fill="white"/>
+  <rect x="483" y="239" width="40" height="120" rx="20" transform="rotate(-28 483 239)" fill="white"/>
+
+  <rect x="442" y="549" width="402" height="94" rx="47" transform="rotate(34 442 549)" fill="white"/>
+  <rect x="826" y="745" width="660" height="94" rx="47" transform="rotate(-39 826 745)" fill="white"/>
+  <circle cx="800" cy="800" r="128" fill="white"/>
+</svg>
