@@ -5,14 +5,26 @@ if [[ "${ALLOW_VERSIONED_PUSH:-0}" == "1" ]]; then
   exit 0
 fi
 
+is_allowed_branch=0
 has_version_tag=0
 
 while read -r local_ref _; do
+  if [[ "$local_ref" == refs/heads/copilot/* ]] \
+    || [[ "$local_ref" == refs/heads/feature/* ]] \
+    || [[ "$local_ref" == refs/heads/fix/* ]] \
+    || [[ "$local_ref" == refs/heads/chore/* ]]; then
+    is_allowed_branch=1
+  fi
+
   if [[ "$local_ref" == refs/tags/v* ]]; then
     has_version_tag=1
     break
   fi
 done
+
+if [[ "$is_allowed_branch" -eq 1 ]]; then
+  exit 0
+fi
 
 if [[ "$has_version_tag" -eq 1 ]]; then
   exit 0
