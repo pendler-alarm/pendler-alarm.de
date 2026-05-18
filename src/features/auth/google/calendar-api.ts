@@ -71,8 +71,16 @@ const MIN_COMPLEX_CONNECTION_BUFFER_MINUTES = 30;
 const OUTSIDE_CITY_DISTANCE_THRESHOLD_METERS = 10_000;
 const BUFFER_COMPLEX_PRODUCT_TYPES = new Set<ConnectionProductType>(['regio', 'train', 'ice', 'ic', 'flight']);
 const CALENDAR_FETCH_RESULTS = String(Math.max(Number(MAX_EVENT_RESULTS) * 4, Number(MAX_EVENT_RESULTS)));
+const ICAL_PROXY_URL = 'https://train-isp-check.vercel.app/api/ics';
 
 const getEventTimeZone = (start?: { timeZone?: string }): string => start?.timeZone?.trim() || DEFAULT_TIME_ZONE;
+
+const buildIcalProxyUrl = (icalUrl: string): string => {
+  const proxyUrl = new URL(ICAL_PROXY_URL);
+
+  proxyUrl.searchParams.set('url', icalUrl);
+  return proxyUrl.toString();
+};
 
 const normalizeConnectionBufferMinutes = (value: number | null | undefined): number => {
   const normalized = Math.round(value ?? DEFAULT_CONNECTION_BUFFER_MINUTES);
@@ -592,10 +600,11 @@ export const fetchUpcomingIcalEvents = async (
     throw new Error(translate('calendar.error.icalUrlMissing'));
   }
 
+  const proxiedUrl = buildIcalProxyUrl(normalizedUrl);
   let response: Response;
 
   try {
-    response = await fetch(normalizedUrl, {
+    response = await fetch(proxiedUrl, {
       headers: {
         Accept: 'text/calendar, text/plain;q=0.9, */*;q=0.8',
       },
