@@ -22,19 +22,25 @@ const hasVisitedBefore = ref(false);
 const isStandalone = ref(false);
 const installHelpMode = ref<InstallHelpMode>('manual');
 let permissionStatus: PermissionStatus | null = null;
+let standaloneMediaQuery: MediaQueryList | null = null;
 const notificationState = ref<NotificationState>('unknown');
 
 
-const showInstallPanel = computed(() =>
+const showInstallPanel = computed(() => (
   !isStandalone.value
-  && hasVisitedBefore.value,
-);
+  && hasVisitedBefore.value
+));
 
 const showNotificationPanel = computed(() =>
-  isStandalone.value
-    && notificationState.value !== 'granted'
-    && notificationState.value !== 'unsupported',
+  !isStandalone.value
+  && hasVisitedBefore.value
+  && notificationState.value !== 'granted'
+  && notificationState.value !== 'unsupported',
 );
+
+const syncStandaloneListener = (): void => {
+  updateStandalone();
+};
 
 const showDialog = computed(() =>
   !dismissed.value && (showInstallPanel.value || showNotificationPanel.value),
@@ -163,6 +169,10 @@ onMounted(async () => {
     localStorageStore.setBoolean(SETUP_VISIT_STORAGE_KEY, true);
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener);
     window.addEventListener('appinstalled', onInstalled);
+    // eslint-disable-next-line local-i18n/no-hardcoded-text
+    standaloneMediaQuery = window.matchMedia('(display-mode: standalone)');
+    standaloneMediaQuery.addEventListener('change', syncStandaloneListener);
+    window.addEventListener('pageshow', syncStandaloneListener);
   }
   await syncLocationState();
   syncNotificationState();
@@ -172,6 +182,11 @@ onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener);
     window.removeEventListener('appinstalled', onInstalled);
+    window.removeEventListener('pageshow', syncStandaloneListener);
+  }
+  if (standaloneMediaQuery) {
+    standaloneMediaQuery.removeEventListener('change', syncStandaloneListener);
+    standaloneMediaQuery = null;
   }
   if (permissionStatus) {
     permissionStatus.onchange = null;
