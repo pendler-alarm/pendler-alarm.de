@@ -27,11 +27,11 @@ const notificationState = ref<NotificationState>('unknown');
 
 const showInstallPanel = computed(() =>
   !isStandalone.value
-  && hasVisitedBefore.value,
+  && (hasVisitedBefore.value || deferredPrompt.value !== null),
 );
 
 const showNotificationPanel = computed(() =>
-  isStandalone.value
+  !isStandalone.value
     && notificationState.value !== 'granted'
     && notificationState.value !== 'unsupported',
 );
