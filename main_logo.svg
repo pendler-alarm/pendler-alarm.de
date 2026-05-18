@@ -1,21 +1,19 @@
-<svg width="1600" height="1600" viewBox="0 0 1600 1600" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1600" height="1600" rx="148" fill="#07B800"/>
-  <path d="M800 160V800H1450C1411 538 1308 364 1119 252C1012 188 900 168 800 160Z" fill="#72E85D"/>
-
-  <rect x="780" y="160" width="40" height="120" rx="20" fill="white"/>
-  <rect x="1077" y="239" width="40" height="120" rx="20" transform="rotate(28 1077 239)" fill="white"/>
-  <rect x="1274" y="492" width="40" height="120" rx="20" transform="rotate(55 1274 492)" fill="white"/>
-  <rect x="1340" y="780" width="40" height="120" rx="20" transform="rotate(90 1340 780)" fill="white"/>
-  <rect x="1244" y="1134" width="40" height="120" rx="20" transform="rotate(120 1244 1134)" fill="white"/>
-  <rect x="1077" y="1312" width="40" height="120" rx="20" transform="rotate(152 1077 1312)" fill="white"/>
-  <rect x="780" y="1340" width="40" height="120" rx="20" fill="white"/>
-  <rect x="483" y="1312" width="40" height="120" rx="20" transform="rotate(-152 483 1312)" fill="white"/>
-  <rect x="316" y="1134" width="40" height="120" rx="20" transform="rotate(-120 316 1134)" fill="white"/>
-  <rect x="220" y="780" width="40" height="120" rx="20" transform="rotate(-90 220 780)" fill="white"/>
-  <rect x="286" y="492" width="40" height="120" rx="20" transform="rotate(-55 286 492)" fill="white"/>
-  <rect x="483" y="239" width="40" height="120" rx="20" transform="rotate(-28 483 239)" fill="white"/>
-
-  <rect x="442" y="549" width="402" height="94" rx="47" transform="rotate(34 442 549)" fill="white"/>
-  <rect x="826" y="745" width="660" height="94" rx="47" transform="rotate(-39 826 745)" fill="white"/>
-  <circle cx="800" cy="800" r="128" fill="white"/>
+<svg width="2062" height="2062" viewBox="0 0 2062 2062" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M0 206.137C0 92.2907 92.2907 0 206.137 0H1855.23C1969.08 0 2061.37 92.2907 2061.37 206.137V1855.23C2061.37 1969.08 1969.08 2061.37 1855.23 2061.37H206.137C92.2907 2061.37 0 1969.08 0 1855.23V206.137Z" fill="#07B800"/>
+<path d="M1031 206.137C1305 232 1523 341 1677 525C1818 693 1895 883 1941 1141C1964 1268 1979 1401 1992 1550C1997 1612 2001 1673 2006 1745C2009 1778 2012 1811 2015 1845C2016 1855 2008 1863 1998 1863H1031V206.137Z" fill="#72E85D"/>
+<rect x="1003.5" y="206.137" width="54.97" height="152" rx="27.485" fill="white"/>
+<rect x="1411.93" y="316.097" width="54.97" height="152" rx="27.485" transform="rotate(30 1411.93 316.097)" fill="white"/>
+<rect x="1718.64" y="602.548" width="54.97" height="152" rx="27.485" transform="rotate(60 1718.64 602.548)" fill="white"/>
+<rect x="1840.76" y="1003.84" width="54.97" height="152" rx="27.485" transform="rotate(90 1840.76 1003.84)" fill="white"/>
+<rect x="1718.64" y="1460.09" width="54.97" height="152" rx="27.485" transform="rotate(120 1718.64 1460.09)" fill="white"/>
+<rect x="1411.93" y="1746.54" width="54.97" height="152" rx="27.485" transform="rotate(150 1411.93 1746.54)" fill="white"/>
+<rect x="1003.5" y="1716.32" width="54.97" height="152" rx="27.485" fill="white"/>
+<rect x="649.543" y="1746.54" width="54.97" height="152" rx="27.485" transform="rotate(-150 649.543 1746.54)" fill="white"/>
+<rect x="342.828" y="1460.09" width="54.97" height="152" rx="27.485" transform="rotate(-120 342.828 1460.09)" fill="white"/>
+<rect x="220.71" y="1058.8" width="54.97" height="152" rx="27.485" transform="rotate(-90 220.71 1058.8)" fill="white"/>
+<rect x="342.828" y="698.899" width="54.97" height="152" rx="27.485" transform="rotate(-60 342.828 698.899)" fill="white"/>
+<rect x="649.543" y="428.155" width="54.97" height="152" rx="27.485" transform="rotate(-30 649.543 428.155)" fill="white"/>
+<path d="M533 744C553 713 594 704 625 724L985 966C1016 986 1025 1027 1005 1058C985 1089 944 1098 913 1078L553 836C522 816 513 775 533 744Z" fill="white"/>
+<path d="M1042 1001L1619 542C1646 522 1685 527 1705 554C1726 582 1721 620 1694 640L1117 1099C1090 1119 1051 1114 1030 1086C1010 1059 1015 1021 1042 1001Z" fill="white"/>
+<circle cx="1030.69" cy="1030.54" r="164.91" fill="white"/>
 </svg>
