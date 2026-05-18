@@ -350,12 +350,6 @@ export const en = {
             success: 'OK',
             error: 'Error',
           },
-          apiCatalog: {
-            title: 'API catalog',
-            used: '{count} requests',
-            unused: 'Not used yet',
-            lastUsed: 'Last used: {value}',
-          },
           history: {
             title: 'Request history',
             empty: 'No requests for the current filter.',

@@ -86,7 +86,7 @@ const persistSession = (session: PersistedSession | null): void => {
   }
 
   if (!session) {
-    sessionStorageStore.remove(STORAGE_KEY);
+    sessionStorageStore.remove(GOOGLE_CALENDAR_AUTH_SESSION_KEY);
     return;
   }
 
