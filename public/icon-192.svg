@@ -1,19 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" fill="none">
-  <rect width="192" height="192" rx="18" fill="#07B800"/>
-  <path d="M96 19.2V96H173.6C169.1 68.7 159.4 48.5 142.6 35.4C130.4 25.9 114.8 21.4 96 19.2Z" fill="#72E85D"/>
-  <rect x="93" y="19" width="6" height="22" rx="3" fill="white"/>
-  <rect x="129.5" y="28.3" width="6" height="22" rx="3" transform="rotate(30 129.5 28.3)" fill="white"/>
-  <rect x="156.1" y="55.2" width="6" height="22" rx="3" transform="rotate(60 156.1 55.2)" fill="white"/>
-  <rect x="166" y="96" width="6" height="22" rx="3" transform="rotate(90 166 96)" fill="white"/>
-  <rect x="156.1" y="136.8" width="6" height="22" rx="3" transform="rotate(120 156.1 136.8)" fill="white"/>
-  <rect x="129.5" y="163.7" width="6" height="22" rx="3" transform="rotate(150 129.5 163.7)" fill="white"/>
-  <rect x="93" y="151" width="6" height="22" rx="3" fill="white"/>
-  <rect x="62.5" y="163.7" width="6" height="22" rx="3" transform="rotate(-150 62.5 163.7)" fill="white"/>
-  <rect x="35.9" y="136.8" width="6" height="22" rx="3" transform="rotate(-120 35.9 136.8)" fill="white"/>
-  <rect x="26" y="96" width="6" height="22" rx="3" transform="rotate(-90 26 96)" fill="white"/>
-  <rect x="35.9" y="55.2" width="6" height="22" rx="3" transform="rotate(-60 35.9 55.2)" fill="white"/>
-  <rect x="62.5" y="28.3" width="6" height="22" rx="3" transform="rotate(-30 62.5 28.3)" fill="white"/>
-  <path d="M49.6 68.8C52.3 64.6 57.8 63.4 62 66.1L96.9 88.9C101.1 91.6 102.3 97.1 99.6 101.3C96.9 105.5 91.4 106.7 87.2 104L52.3 81.2C48.1 78.5 46.9 73 49.6 68.8Z" fill="white"/>
-  <path d="M100.1 92.8L157 49.6C160.9 46.6 166.6 47.4 169.5 51.3C172.5 55.2 171.7 60.9 167.8 63.9L110.9 107.1C107 110.1 101.3 109.3 98.3 105.4C95.4 101.5 96.2 95.8 100.1 92.8Z" fill="white"/>
-  <circle cx="96" cy="96" r="15.5" fill="white"/>
+<svg width="192" height="192" viewBox="0 0 2062 2062" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M0 206.137C0 92.2907 92.2907 0 206.137 0H1855.23C1969.08 0 2061.37 92.2907 2061.37 206.137V1855.23C2061.37 1969.08 1969.08 2061.37 1855.23 2061.37H206.137C92.2907 2061.37 0 1969.08 0 1855.23V206.137Z" fill="#07B800"/>
+<path d="M1031 206.137C1305 232 1523 341 1677 525C1818 693 1895 883 1941 1141C1964 1268 1979 1401 1992 1550C1997 1612 2001 1673 2006 1745C2009 1778 2012 1811 2015 1845C2016 1855 2008 1863 1998 1863H1031V206.137Z" fill="#72E85D"/>
+<rect x="1003.5" y="206.137" width="54.97" height="152" rx="27.485" fill="white"/>
+<rect x="1411.93" y="316.097" width="54.97" height="152" rx="27.485" transform="rotate(30 1411.93 316.097)" fill="white"/>
+<rect x="1718.64" y="602.548" width="54.97" height="152" rx="27.485" transform="rotate(60 1718.64 602.548)" fill="white"/>
+<rect x="1840.76" y="1003.84" width="54.97" height="152" rx="27.485" transform="rotate(90 1840.76 1003.84)" fill="white"/>
+<rect x="1718.64" y="1460.09" width="54.97" height="152" rx="27.485" transform="rotate(120 1718.64 1460.09)" fill="white"/>
+<rect x="1411.93" y="1746.54" width="54.97" height="152" rx="27.485" transform="rotate(150 1411.93 1746.54)" fill="white"/>
+<rect x="1003.5" y="1716.32" width="54.97" height="152" rx="27.485" fill="white"/>
+<rect x="649.543" y="1746.54" width="54.97" height="152" rx="27.485" transform="rotate(-150 649.543 1746.54)" fill="white"/>
+<rect x="342.828" y="1460.09" width="54.97" height="152" rx="27.485" transform="rotate(-120 342.828 1460.09)" fill="white"/>
+<rect x="220.71" y="1058.8" width="54.97" height="152" rx="27.485" transform="rotate(-90 220.71 1058.8)" fill="white"/>
+<rect x="342.828" y="698.899" width="54.97" height="152" rx="27.485" transform="rotate(-60 342.828 698.899)" fill="white"/>
+<rect x="649.543" y="428.155" width="54.97" height="152" rx="27.485" transform="rotate(-30 649.543 428.155)" fill="white"/>
+<path d="M533 744C553 713 594 704 625 724L985 966C1016 986 1025 1027 1005 1058C985 1089 944 1098 913 1078L553 836C522 816 513 775 533 744Z" fill="white"/>
+<path d="M1042 1001L1619 542C1646 522 1685 527 1705 554C1726 582 1721 620 1694 640L1117 1099C1090 1119 1051 1114 1030 1086C1010 1059 1015 1021 1042 1001Z" fill="white"/>
+<circle cx="1030.69" cy="1030.54" r="164.91" fill="white"/>
 </svg>
