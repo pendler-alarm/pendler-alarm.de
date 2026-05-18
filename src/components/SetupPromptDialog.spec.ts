@@ -9,9 +9,9 @@ import SetupPromptDialog from './SetupPromptDialog.vue';
 
 const i18n = createI18n({
   legacy: false,
-  locale: 'de',
+  locale: 'en',
   messages: {
-    de: {
+    en: {
       components: {
         setupPrompt: {
           eyebrow: 'Get set up',
