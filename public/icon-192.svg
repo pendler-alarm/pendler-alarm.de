@@ -1,9 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
-  <rect width="192" height="192" rx="32" fill="#f4f4f0"/>
-  <rect x="20" y="20" width="152" height="152" rx="28" fill="#d9d9d9" stroke="#ff0b0b" stroke-width="12"/>
-  <path d="M96 32c44 4 60 18 68 52H96V32Z" fill="#75eb68"/>
-  <circle cx="96" cy="96" r="42" fill="none" stroke="#3c3c3c" stroke-width="6"/>
-  <path d="M96 96l39-29" stroke="#ff0b0b" stroke-width="10" stroke-linecap="round"/>
-  <path d="M96 96 69 79" stroke="#ff0b0b" stroke-width="10" stroke-linecap="round"/>
-  <circle cx="96" cy="96" r="12" fill="#fff" stroke="#ff0b0b" stroke-width="6"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" fill="none">
+  <rect width="192" height="192" rx="18" fill="#07B800"/>
+  <path d="M96 19.2V96H173.6C169.1 68.7 159.4 48.5 142.6 35.4C130.4 25.9 114.8 21.4 96 19.2Z" fill="#72E85D"/>
+  <rect x="93" y="19" width="6" height="22" rx="3" fill="white"/>
+  <rect x="129.5" y="28.3" width="6" height="22" rx="3" transform="rotate(30 129.5 28.3)" fill="white"/>
+  <rect x="156.1" y="55.2" width="6" height="22" rx="3" transform="rotate(60 156.1 55.2)" fill="white"/>
+  <rect x="166" y="96" width="6" height="22" rx="3" transform="rotate(90 166 96)" fill="white"/>
+  <rect x="156.1" y="136.8" width="6" height="22" rx="3" transform="rotate(120 156.1 136.8)" fill="white"/>
+  <rect x="129.5" y="163.7" width="6" height="22" rx="3" transform="rotate(150 129.5 163.7)" fill="white"/>
+  <rect x="93" y="151" width="6" height="22" rx="3" fill="white"/>
+  <rect x="62.5" y="163.7" width="6" height="22" rx="3" transform="rotate(-150 62.5 163.7)" fill="white"/>
+  <rect x="35.9" y="136.8" width="6" height="22" rx="3" transform="rotate(-120 35.9 136.8)" fill="white"/>
+  <rect x="26" y="96" width="6" height="22" rx="3" transform="rotate(-90 26 96)" fill="white"/>
+  <rect x="35.9" y="55.2" width="6" height="22" rx="3" transform="rotate(-60 35.9 55.2)" fill="white"/>
+  <rect x="62.5" y="28.3" width="6" height="22" rx="3" transform="rotate(-30 62.5 28.3)" fill="white"/>
+  <path d="M49.6 68.8C52.3 64.6 57.8 63.4 62 66.1L96.9 88.9C101.1 91.6 102.3 97.1 99.6 101.3C96.9 105.5 91.4 106.7 87.2 104L52.3 81.2C48.1 78.5 46.9 73 49.6 68.8Z" fill="white"/>
+  <path d="M100.1 92.8L157 49.6C160.9 46.6 166.6 47.4 169.5 51.3C172.5 55.2 171.7 60.9 167.8 63.9L110.9 107.1C107 110.1 101.3 109.3 98.3 105.4C95.4 101.5 96.2 95.8 100.1 92.8Z" fill="white"/>
+  <circle cx="96" cy="96" r="15.5" fill="white"/>
 </svg>

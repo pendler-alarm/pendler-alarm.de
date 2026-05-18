@@ -1,9 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#f4f4f0"/>
-  <rect x="96" y="96" width="320" height="320" rx="64" fill="#d9d9d9" stroke="#ff0b0b" stroke-width="28"/>
-  <path d="M256 122c92 8 128 37 145 108H256V122Z" fill="#75eb68"/>
-  <circle cx="256" cy="256" r="92" fill="none" stroke="#3c3c3c" stroke-width="16"/>
-  <path d="M256 256l85-63" stroke="#ff0b0b" stroke-width="24" stroke-linecap="round"/>
-  <path d="M256 256 197 219" stroke="#ff0b0b" stroke-width="24" stroke-linecap="round"/>
-  <circle cx="256" cy="256" r="24" fill="#fff" stroke="#ff0b0b" stroke-width="14"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="96" fill="#07B800"/>
+  <path d="M256 51.2V256H462.9C450.9 183.1 425.1 129.2 380.3 94.4C347.8 69 306.1 57 256 51.2Z" fill="#72E85D"/>
+  <rect x="248" y="51" width="16" height="58" rx="8" fill="white"/>
+  <rect x="345.4" y="75.6" width="16" height="58" rx="8" transform="rotate(30 345.4 75.6)" fill="white"/>
+  <rect x="416.2" y="147.4" width="16" height="58" rx="8" transform="rotate(60 416.2 147.4)" fill="white"/>
+  <rect x="442" y="256" width="16" height="58" rx="8" transform="rotate(90 442 256)" fill="white"/>
+  <rect x="416.2" y="364.6" width="16" height="58" rx="8" transform="rotate(120 416.2 364.6)" fill="white"/>
+  <rect x="345.4" y="436.4" width="16" height="58" rx="8" transform="rotate(150 345.4 436.4)" fill="white"/>
+  <rect x="248" y="403" width="16" height="58" rx="8" fill="white"/>
+  <rect x="166.6" y="436.4" width="16" height="58" rx="8" transform="rotate(-150 166.6 436.4)" fill="white"/>
+  <rect x="95.8" y="364.6" width="16" height="58" rx="8" transform="rotate(-120 95.8 364.6)" fill="white"/>
+  <rect x="70" y="256" width="16" height="58" rx="8" transform="rotate(-90 70 256)" fill="white"/>
+  <rect x="95.8" y="147.4" width="16" height="58" rx="8" transform="rotate(-60 95.8 147.4)" fill="white"/>
+  <rect x="166.6" y="75.6" width="16" height="58" rx="8" transform="rotate(-30 166.6 75.6)" fill="white"/>
+  <path d="M132.2 183.4C139.4 172.3 154.1 169 165.2 176.2L258.2 237C269.3 244.2 272.6 258.9 265.4 270C258.2 281.1 243.5 284.4 232.4 277.2L139.4 216.4C128.3 209.2 125 194.5 132.2 183.4Z" fill="white"/>
+  <path d="M267 248.6L418.7 133.3C429.2 125.3 444.4 127.5 452.4 138C460.4 148.5 458.2 163.7 447.7 171.7L296 287C285.5 295 270.3 292.8 262.3 282.3C254.3 271.8 256.5 256.6 267 248.6Z" fill="white"/>
+  <circle cx="256" cy="256" r="41" fill="white"/>
 </svg>
