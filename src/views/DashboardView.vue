@@ -195,7 +195,7 @@ let fixedLocationAutocompleteTimer: number | null = null;
 let refreshTimer: number | null = null;
 const reminderTimers = new Map<string, number>();
 const sentReminderKeys = new Set<string>();
-const notificationIconUrl = '/icon-192.png';
+const notificationIconUrl = new URL('../assets/svg/logo.svg', import.meta.url).href;
 
 const apiTotal = computed(() => apiMetrics.value.googleCalendar + apiMetrics.value.motis + apiMetrics.value.sharing);
 const expandedConnectionCount = useExpandToggleGroupCount('dashboard-connections');
