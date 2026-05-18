@@ -1395,6 +1395,7 @@ watch(showTransferWalkNodes, () => {
   <section class="dashboard-view">
     <Widget>
       <template #sub-title>{{ t('views.dashboard.hero.subTitle') }}</template>
+      <template #icon>{{ t('app.logo') }}</template>
       <template #title>{{ t('views.dashboard.hero.title') }}</template>
       <template #description>{{ t('views.dashboard.hero.description') }}</template>
     </Widget>

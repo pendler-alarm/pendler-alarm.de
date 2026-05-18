@@ -25,13 +25,17 @@ let permissionStatus: PermissionStatus | null = null;
 const notificationState = ref<NotificationState>('unknown');
 
 
-const showInstallPanel = computed(() =>
+const shouldShowSetupGuidance = computed(() =>
   !isStandalone.value
-  && hasVisitedBefore.value,
+  && (hasVisitedBefore.value || deferredPrompt.value !== null),
+);
+
+const showInstallPanel = computed(() =>
+  shouldShowSetupGuidance.value,
 );
 
 const showNotificationPanel = computed(() =>
-  isStandalone.value
+  shouldShowSetupGuidance.value
     && notificationState.value !== 'granted'
     && notificationState.value !== 'unsupported',
 );
