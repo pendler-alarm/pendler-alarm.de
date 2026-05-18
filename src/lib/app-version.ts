@@ -1,7 +1,6 @@
+import { APP_VERSION_STORAGE_KEY } from '@/features/privacy/privacy';
 import { getDefaultReleaseMeta } from '@/lib/release-meta';
 import { localStorageStore } from '@/lib/storage';
-
-const APP_VERSION_STORAGE_KEY = 'pendler-alarm.app-version';
 
 export const getStoredAppVersion = (): string | null => {
   const value = localStorageStore.getString(APP_VERSION_STORAGE_KEY);

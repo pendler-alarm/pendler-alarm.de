@@ -9,6 +9,7 @@ export const en = {
     navigation: {
       dashboard: 'Dashboard',
       about: 'About',
+      privacy: 'Privacy',
       github: 'Github',
     },
     locale: {
@@ -349,6 +350,12 @@ export const en = {
             success: 'OK',
             error: 'Error',
           },
+          apiCatalog: {
+            title: 'API catalog',
+            used: '{count} requests',
+            unused: 'Not used yet',
+            lastUsed: 'Last used: {value}',
+          },
           history: {
             title: 'Request history',
             empty: 'No requests for the current filter.',
@@ -432,6 +439,151 @@ export const en = {
       privacyStorageNotice: 'Some settings and calendar data are temporarily stored locally in your browser localStorage for usage.',
       imageAlt: 'Group photo of the Pendler Alarm team',
       imageCredit: '© Oliver Lang for DB AG',
+    },
+    privacy: {
+      kicker: '🔐 Privacy',
+      title: 'Privacy and local data',
+      lead: 'This view transparently shows which external and browser-side APIs the app uses and which data is stored locally in the browser.',
+      introTitle: 'What this covers',
+      introBodyOne: 'Pendler Alarm processes data primarily in your browser. External requests are only triggered when you actively use features such as calendar access, routing, geocoding, sharing, or train detection.',
+      introBodyTwo: 'The lists below are connected to the running app. API entries are counted from the local debug history, and browser storage entries automatically show whether data is currently present on this device.',
+      externalApisTitle: 'Used APIs',
+      externalApisBody: 'The following interfaces may be contacted depending on the features you use. The request count is based on the locally stored debug history of this browser.',
+      browserStorageTitle: 'Browser storage',
+      browserStorageBody: 'These keys are used to store settings, caches, and local convenience features in the browser. No server-side user profiles are created from this data.',
+      contactTitle: 'Responsibility and contact',
+      contactBody: 'If you have questions about privacy or the app behavior, contact the team at info[at]pendler-alarm.de.',
+      apiStatusUsed: 'Used ({count})',
+      apiStatusUnused: 'Not used',
+      apiLastUsed: 'Last used: {value}',
+      apiProvider: 'Provider: {value}',
+      apiUrl: 'Endpoint: {value}',
+      storageStatusPresent: 'Currently stored in this browser',
+      storageStatusMissing: 'Not currently stored',
+      storageType: 'Type: {value}',
+      storageKey: 'Key: {value}',
+      providers: {
+        google: 'Google',
+        transitous: 'Transitous / MOTIS',
+        pendlerAlarm: 'pendler-alarm.de backend',
+        nextbike: 'nextbike',
+        trainIspCheck: 'train-isp-check',
+        browser: 'Browser API',
+      },
+      items: {
+        googleCalendarEvents: {
+          title: 'Google Calendar events',
+          description: 'Loads upcoming entries from the primary Google Calendar after you actively grant access.',
+        },
+        motisGeocode: {
+          title: 'MOTIS geocoding',
+          description: 'Resolves free-form addresses or place names into coordinates so start and destination points can be calculated.',
+        },
+        motisReverseGeocode: {
+          title: 'MOTIS reverse geocoding',
+          description: 'Translates coordinates back into a readable address, for example for the current location or train location.',
+        },
+        motisPlan: {
+          title: 'MOTIS routing',
+          description: 'Calculates transit connections between origin and destination based on public transport routing data.',
+        },
+        delayPredictions: {
+          title: 'Delay predictions',
+          description: 'Requests delay predictions for a specific trip to provide more realistic transfer and departure guidance.',
+        },
+        workflowStations: {
+          title: 'Workflow stations',
+          description: 'Loads station data from the pendler-alarm.de backend for additional station-related details.',
+        },
+        nextbike: {
+          title: 'nextbike live',
+          description: 'Loads available sharing stations and bike availability for sharing recommendations.',
+        },
+        trainIspCheck: {
+          title: 'Train ISP check',
+          description: 'Checks via a helper service whether the current network connection suggests a train environment.',
+        },
+        browserGeolocation: {
+          title: 'Browser geolocation',
+          description: 'Reads the current location directly via the browser geolocation feature without requiring a dedicated external API endpoint.',
+        },
+        observed: {
+          title: 'Observed request',
+          description: 'Request detected automatically from the API debug history that is not yet covered by the static catalog.',
+        },
+        appLocale: {
+          title: 'Language',
+          description: 'Stores the selected UI language.',
+        },
+        calendarSource: {
+          title: 'Calendar source',
+          description: 'Remembers whether Google OAuth or an iCal URL is used as the calendar source.',
+        },
+        reminderLead: {
+          title: 'Reminder lead time',
+          description: 'Stores the preferred lead time for reminders in minutes.',
+        },
+        sharingPreferences: {
+          title: 'Sharing preferences',
+          description: 'Stores provider, search radius, and distance limits for sharing suggestions.',
+        },
+        connectionBuffer: {
+          title: 'Event buffer',
+          description: 'Stores per-event buffer times for route calculations.',
+        },
+        deutschlandticket: {
+          title: 'Deutschlandticket',
+          description: 'Stores whether the Deutschlandticket should be considered in routing settings.',
+        },
+        transferWalkNodes: {
+          title: 'Walk details',
+          description: 'Stores whether internal walking nodes should be shown in more detail in routes.',
+        },
+        bahnBookingClass: {
+          title: 'Rail class',
+          description: 'Stores the preferred booking class for route display.',
+        },
+        bahnTravelerProfile: {
+          title: 'Rail traveler profile',
+          description: 'Stores the currently selected traveler profile for rail-related requests.',
+        },
+        setupVisit: {
+          title: 'Setup hint',
+          description: 'Remembers whether the initial setup dialog has already been shown.',
+        },
+        geoCache: {
+          title: 'Geo cache',
+          description: 'Caches resolved places and coordinates locally in the browser.',
+        },
+        connectionCache: {
+          title: 'Connection cache',
+          description: 'Caches previously calculated connections and their recent history locally in the browser.',
+        },
+        calendarEventsCache: {
+          title: 'Calendar cache',
+          description: 'Stores the latest loaded calendar events so they can be shown again if needed.',
+        },
+        appVersion: {
+          title: 'App version',
+          description: 'Remembers the latest known app version for service worker and update logic.',
+        },
+        apiMetrics: {
+          title: 'API debug history',
+          description: 'Stores request counters and debug history for the local API view.',
+        },
+        originPreferences: {
+          title: 'Origin favorites',
+          description: 'Stores origin mode, fixed origin address, and saved favorites.',
+        },
+        googleAuthSession: {
+          title: 'Google session',
+          description: 'Temporary session data for Google OAuth in sessionStorage.',
+        },
+        serviceWorkerReload: {
+          title: 'Reload flag',
+          description: 'Temporary sessionStorage flag used to coordinate reloads during worker updates.',
+        },
+      },
     },
     test: {
       title: 'Test view',

@@ -1,4 +1,5 @@
 import type { Coordinates } from '@/features/motis/location-service';
+import { ORIGIN_PREFERENCES_STORAGE_KEY } from '@/features/privacy/privacy';
 import { localStorageStore } from '@/lib/storage';
 
 export type OriginMode = 'current' | 'fixed';
@@ -15,8 +16,6 @@ export type StoredOriginPreferences = {
   fixedLocationInput: string;
   favorites: FavoriteLocation[];
 };
-
-const STORAGE_KEY = 'pendler-alarm.origin-preferences';
 
 const defaultPreferences: StoredOriginPreferences = {
   mode: 'current',
@@ -66,7 +65,7 @@ const normalizeFavorite = (value: unknown): FavoriteLocation | null => {
   };
 };
 
-export const loadStoredOriginPreferences = (): StoredOriginPreferences => localStorageStore.getJson(STORAGE_KEY, (value) => {
+export const loadStoredOriginPreferences = (): StoredOriginPreferences => localStorageStore.getJson(ORIGIN_PREFERENCES_STORAGE_KEY, (value) => {
   const parsed = value as Partial<StoredOriginPreferences> | null;
 
   return {
@@ -81,5 +80,5 @@ export const loadStoredOriginPreferences = (): StoredOriginPreferences => localS
 }) ?? defaultPreferences;
 
 export const storeOriginPreferences = (preferences: StoredOriginPreferences): void => {
-  localStorageStore.setJson(STORAGE_KEY, preferences);
+  localStorageStore.setJson(ORIGIN_PREFERENCES_STORAGE_KEY, preferences);
 };

@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
+import { GOOGLE_CALENDAR_AUTH_SESSION_KEY } from '@/features/privacy/privacy';
 import { translate } from '@/i18n';
 import { sessionStorageStore } from '@/lib/storage';
 import { GOOGLE_CALENDAR_SCOPE, GOOGLE_IDENTITY_SCRIPT_SRC } from '@/utils/constants/api';
@@ -10,8 +11,6 @@ type PersistedSession = {
   accessToken: string;
   expiresAt: number;
 };
-
-const STORAGE_KEY = 'google-calendar-auth';
 
 type GoogleTokenResponse = {
   access_token?: string;
@@ -58,7 +57,7 @@ const readPersistedSession = (): PersistedSession | null => {
     return null;
   }
 
-  const parsed = sessionStorageStore.getJson(STORAGE_KEY, (value) => (
+  const parsed = sessionStorageStore.getJson(GOOGLE_CALENDAR_AUTH_SESSION_KEY, (value) => (
     value && typeof value === 'object' ? value as Partial<PersistedSession> : null
   ));
 
@@ -71,7 +70,7 @@ const readPersistedSession = (): PersistedSession | null => {
   }
 
   if (parsed.expiresAt <= Date.now()) {
-    sessionStorageStore.remove(STORAGE_KEY);
+    sessionStorageStore.remove(GOOGLE_CALENDAR_AUTH_SESSION_KEY);
     return null;
   }
 
@@ -91,7 +90,7 @@ const persistSession = (session: PersistedSession | null): void => {
     return;
   }
 
-  sessionStorageStore.setJson(STORAGE_KEY, session);
+  sessionStorageStore.setJson(GOOGLE_CALENDAR_AUTH_SESSION_KEY, session);
 };
 
 const loadGoogleIdentityScript = async (): Promise<void> => {

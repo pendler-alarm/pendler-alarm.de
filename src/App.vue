@@ -93,6 +93,7 @@ onBeforeUnmount(() => {
         <span class="service-worker-banner__version">{{ t('app.footer.version') }} {{ activeWorkerVersion }}</span>
         <RouterLink class="service-worker-banner__link" to="/dashboard">{{ t('app.navigation.dashboard') }}</RouterLink>
         <RouterLink class="service-worker-banner__link" to="/about">{{ t('app.navigation.about') }}</RouterLink>
+        <RouterLink class="service-worker-banner__link" to="/privacy">{{ t('app.navigation.privacy') }}</RouterLink>
         <a target="_blank" href="https://github.com/pendler-alarm/pendler-alarm.de"
           class="service-worker-banner__link">{{
             t('app.navigation.github') }}</a>

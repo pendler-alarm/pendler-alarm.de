@@ -1,4 +1,5 @@
 import { createI18n } from 'vue-i18n';
+import { APP_LOCALE_STORAGE_KEY } from '@/features/privacy/privacy';
 import { localStorageStore } from '@/lib/storage';
 import { de } from './messages/de';
 import { en } from './messages/en';
@@ -10,7 +11,6 @@ export const messages = {
 
 export type AppLocale = keyof typeof messages;
 
-const STORAGE_KEY = 'app-locale';
 const DEFAULT_LOCALE: AppLocale = 'de';
 const isBrowser = typeof window !== 'undefined';
 
@@ -24,7 +24,7 @@ const getInitialLocale = (): AppLocale => {
     return DEFAULT_LOCALE;
   }
 
-  const storedLocale = localStorageStore.getString(STORAGE_KEY);
+  const storedLocale = localStorageStore.getString(APP_LOCALE_STORAGE_KEY);
 
   if (isAppLocale(storedLocale)) {
     return storedLocale;
@@ -54,7 +54,7 @@ export const setLocale = (locale: AppLocale): void => {
   i18n.global.locale.value = locale;
 
   if (isBrowser) {
-    localStorageStore.setString(STORAGE_KEY, locale);
+    localStorageStore.setString(APP_LOCALE_STORAGE_KEY, locale);
   }
 };
 

@@ -1,4 +1,5 @@
 import { reactive, readonly } from 'vue';
+import { SERVICE_WORKER_RELOAD_SESSION_KEY } from '@/features/privacy/privacy';
 import { getInitialAppVersion, storeAppVersion } from '@/lib/app-version';
 import { sessionStorageStore } from '@/lib/storage';
 
@@ -16,8 +17,6 @@ type ServiceWorkerState = {
 
  
 const SERVICE_WORKER_URL = '/service-worker.js';
-const RELOAD_FLAG_KEY = 'pendler-alarm.service-worker-reload';
-
 const state = reactive<ServiceWorkerState>({
   isSupported: false,
   isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
@@ -57,17 +56,17 @@ const maybeReloadForWorkerVersion = (version: string | null | undefined): void =
   const normalizedVersion = version?.trim();
 
   if (!normalizedVersion || normalizedVersion === state.appVersion) {
-    sessionStorageStore.remove(RELOAD_FLAG_KEY);
+    sessionStorageStore.remove(SERVICE_WORKER_RELOAD_SESSION_KEY);
     return;
   }
 
-  const lastReloadedVersion = sessionStorageStore.getString(RELOAD_FLAG_KEY);
+  const lastReloadedVersion = sessionStorageStore.getString(SERVICE_WORKER_RELOAD_SESSION_KEY);
 
   if (lastReloadedVersion === normalizedVersion) {
     return;
   }
 
-  sessionStorageStore.setString(RELOAD_FLAG_KEY, normalizedVersion);
+  sessionStorageStore.setString(SERVICE_WORKER_RELOAD_SESSION_KEY, normalizedVersion);
   window.location.reload();
 };
 

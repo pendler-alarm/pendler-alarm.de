@@ -1,4 +1,5 @@
 import type { Coordinates, ResolvedLocation } from '@/features/motis/location-service';
+import { GEO_CACHE_STORAGE_KEY } from '@/features/privacy/privacy';
 import { localStorageStore } from '@/lib/storage';
 
 export type GeoCacheValue = ResolvedLocation & {
@@ -7,7 +8,6 @@ export type GeoCacheValue = ResolvedLocation & {
 
 type GeoCacheStore = Record<string, GeoCacheValue>;
 
-const STORAGE_KEY = 'pendler_alarm_geo_cache_v1';
 const MAX_ENTRIES = 80;
 
 const isFiniteNumber = (value: unknown): value is number =>
@@ -44,7 +44,7 @@ const normalizeEntry = (value: unknown): GeoCacheValue | null => {
   };
 };
 
-const loadCache = (): GeoCacheStore => localStorageStore.getJson(STORAGE_KEY, (value) => {
+const loadCache = (): GeoCacheStore => localStorageStore.getJson(GEO_CACHE_STORAGE_KEY, (value) => {
   if (!value || typeof value !== 'object') {
     return null;
   }
@@ -59,7 +59,7 @@ const loadCache = (): GeoCacheStore => localStorageStore.getJson(STORAGE_KEY, (v
 let cache = loadCache();
 
 const saveCache = (): void => {
-  localStorageStore.setJson(STORAGE_KEY, cache);
+  localStorageStore.setJson(GEO_CACHE_STORAGE_KEY, cache);
 };
 
 const pruneCache = (): void => {

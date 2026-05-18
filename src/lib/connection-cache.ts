@@ -1,4 +1,5 @@
 import type { ConnectionSummary } from '@/features/motis/routing-service.d';
+import { CONNECTION_CACHE_STORAGE_KEY } from '@/features/privacy/privacy';
 import { localStorageStore } from '@/lib/storage';
 
 type CachedConnection = {
@@ -11,10 +12,9 @@ type ConnectionCacheEntry = {
   history: CachedConnection[];
 };
 
-const STORAGE_KEY = 'pendler_alarm_connection_cache_v3';
 const MAX_HISTORY = 6;
 
-const loadCache = (): Record<string, ConnectionCacheEntry> => localStorageStore.getJson(STORAGE_KEY, (value) => (
+const loadCache = (): Record<string, ConnectionCacheEntry> => localStorageStore.getJson(CONNECTION_CACHE_STORAGE_KEY, (value) => (
   value && typeof value === 'object' ? value as Record<string, ConnectionCacheEntry> : null
 )) ?? {};
 
@@ -24,7 +24,7 @@ const createCacheKey = (eventId: string, requestedBufferMinutes: number): string
 let cache: Record<string, ConnectionCacheEntry> = loadCache();
 
 const saveCache = (): void => {
-  localStorageStore.setJson(STORAGE_KEY, cache);
+  localStorageStore.setJson(CONNECTION_CACHE_STORAGE_KEY, cache);
 };
 
 export const getCachedConnection = (eventId: string, requestedBufferMinutes: number): ConnectionCacheEntry | null =>

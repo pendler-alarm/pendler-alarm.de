@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
+import { CALENDAR_SOURCE_STORAGE_KEY } from '@/features/privacy/privacy';
 import { localStorageStore } from '@/lib/storage';
 
 export type CalendarSourceMode = 'google' | 'ical';
@@ -9,10 +10,8 @@ type PersistedCalendarSource = {
   icalUrl: string;
 };
 
-const STORAGE_KEY = 'pendler-alarm.calendar-source';
-
 const readPersistedCalendarSource = (): PersistedCalendarSource | null => localStorageStore.getJson(
-  STORAGE_KEY,
+  CALENDAR_SOURCE_STORAGE_KEY,
   (value) => {
     if (!value || typeof value !== 'object') {
       return null;
@@ -30,7 +29,7 @@ const readPersistedCalendarSource = (): PersistedCalendarSource | null => localS
 );
 
 const persistCalendarSource = (value: PersistedCalendarSource): void => {
-  localStorageStore.setJson(STORAGE_KEY, value);
+  localStorageStore.setJson(CALENDAR_SOURCE_STORAGE_KEY, value);
 };
 
 export const useCalendarSourceStore = defineStore('calendar-source', () => {

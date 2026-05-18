@@ -18,6 +18,10 @@ export const additionalRoutes: AppRoute[] = [
     view: 'AboutView.vue',
   },
   {
+    name: 'privacy',
+    view: 'PrivacyView.vue',
+  },
+  {
     name: 'releases',
     view: 'ReleaseView.vue',
   },

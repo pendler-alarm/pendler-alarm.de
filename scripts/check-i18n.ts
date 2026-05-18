@@ -20,6 +20,11 @@ const ignoredFileSnippets = ['__tests__', '.spec.ts'];
 const i18nShorthandPrefixes: Record<string, string> = {
   connection: 'views.dashboard.events.connection',
 };
+const derivedKeyMatchers = [
+  { marker: 'getPrivacyItemTitleKey', match: (key: string): boolean => key.startsWith('views.privacy.items.') && key.endsWith('.title') },
+  { marker: 'getPrivacyItemDescriptionKey', match: (key: string): boolean => key.startsWith('views.privacy.items.') && key.endsWith('.description') },
+  { marker: 'getPrivacyProviderKey', match: (key: string): boolean => key.startsWith('views.privacy.providers.') },
+];
 const allowedHardcodedFiles = new Set([
   path.join(srcRoot, 'router', 'routes.ts'),
   path.join(srcRoot, 'router', 'index.ts'),
@@ -140,6 +145,18 @@ const collectUsedKeys = (source: string, knownKeys: Set<string>): Set<string> =>
 
       if (knownKeys.has(resolvedKey)) {
         usedKeys.add(resolvedKey);
+      }
+    }
+  }
+
+  for (const matcher of derivedKeyMatchers) {
+    if (!source.includes(matcher.marker)) {
+      continue;
+    }
+
+    for (const key of knownKeys) {
+      if (matcher.match(key)) {
+        usedKeys.add(key);
       }
     }
   }

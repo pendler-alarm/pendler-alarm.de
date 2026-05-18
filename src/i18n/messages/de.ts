@@ -9,6 +9,7 @@ export const de = {
     navigation: {
       dashboard: 'Dashboard',
       about: 'About',
+      privacy: 'Datenschutz',
       github: 'Github',
     },
     locale: {
@@ -349,6 +350,12 @@ export const de = {
             success: 'OK',
             error: 'Fehler',
           },
+          apiCatalog: {
+            title: 'API-Liste',
+            used: '{count} Requests',
+            unused: 'Noch nicht genutzt',
+            lastUsed: 'Zuletzt genutzt: {value}',
+          },
           history: {
             title: 'Request History',
             empty: 'Keine Requests fur den aktuellen Filter.',
@@ -432,6 +439,151 @@ export const de = {
       privacyStorageNotice: 'Einige Einstellungen und Kalenderangaben werden fur die Nutzung lokal im localStorage deines Browsers zwischengespeichert.',
       imageAlt: 'Gruppenbild des Pendler-Alarm-Teams',
       imageCredit: '© Oliver Lang für DB AG',
+    },
+    privacy: {
+      kicker: '🔐 Datenschutz',
+      title: 'Datenschutz und lokale Daten',
+      lead: 'Diese Ansicht zeigt transparent, welche externen und browserseitigen APIs die App verwendet und welche Daten lokal im Browser gespeichert werden.',
+      introTitle: 'Worum es hier geht',
+      introBodyOne: 'Pendler Alarm verarbeitet Daten in erster Linie direkt in deinem Browser. Externe Requests entstehen nur dann, wenn du Funktionen wie Kalenderabfrage, Routing, Geocoding, Sharing oder Zug-Erkennung aktiv nutzt.',
+      introBodyTwo: 'Die Listen unten sind an die laufende App gekoppelt. API-Einträge werden aus der Debug-Historie mitgezählt, und Browser-Storage-Einträge zeigen automatisch an, ob auf diesem Gerät aktuell bereits Daten vorhanden sind.',
+      externalApisTitle: 'Verwendete APIs',
+      externalApisBody: 'Die folgenden Schnittstellen können je nach genutzter Funktion angesprochen werden. Die Request-Anzahl bezieht sich auf die lokal gespeicherte Debug-Historie dieses Browsers.',
+      browserStorageTitle: 'Browser Storage',
+      browserStorageBody: 'Diese Schlüssel werden verwendet, um Einstellungen, Caches und lokale Komfortfunktionen im Browser zu speichern. Es werden keine serverseitigen Benutzerprofile aus diesen Daten aufgebaut.',
+      contactTitle: 'Verantwortung und Rückfragen',
+      contactBody: 'Bei Rückfragen zum Datenschutz oder zur Funktionsweise kannst du das Team unter info[at]pendler-alarm.de kontaktieren.',
+      apiStatusUsed: 'Genutzt ({count})',
+      apiStatusUnused: 'Nicht genutzt',
+      apiLastUsed: 'Zuletzt genutzt: {value}',
+      apiProvider: 'Anbieter: {value}',
+      apiUrl: 'Endpoint: {value}',
+      storageStatusPresent: 'Aktuell im Browser vorhanden',
+      storageStatusMissing: 'Derzeit nicht gespeichert',
+      storageType: 'Typ: {value}',
+      storageKey: 'Key: {value}',
+      providers: {
+        google: 'Google',
+        transitous: 'Transitous / MOTIS',
+        pendlerAlarm: 'pendler-alarm.de Backend',
+        nextbike: 'nextbike',
+        trainIspCheck: 'train-isp-check',
+        browser: 'Browser API',
+      },
+      items: {
+        googleCalendarEvents: {
+          title: 'Google Calendar Events',
+          description: 'Lädt die nächsten Termine aus dem primären Google Kalender, nachdem du die Freigabe aktiv erteilt hast.',
+        },
+        motisGeocode: {
+          title: 'MOTIS Geocoding',
+          description: 'Löst freie Adressen oder Ortsangaben in Koordinaten auf, damit Start- und Zielpunkte berechnet werden können.',
+        },
+        motisReverseGeocode: {
+          title: 'MOTIS Reverse Geocoding',
+          description: 'Übersetzt Koordinaten zurück in eine lesbare Adresse, etwa für den aktuellen Standort oder Zugstandort.',
+        },
+        motisPlan: {
+          title: 'MOTIS Routing',
+          description: 'Berechnet Verbindungen zwischen Start und Ziel auf Basis von ÖPNV-Routingdaten.',
+        },
+        delayPredictions: {
+          title: 'Delay Predictions',
+          description: 'Fragt Verspätungsprognosen für eine konkrete Verbindung an, um realistischere Umstiegs- und Abfahrthinweise zu geben.',
+        },
+        workflowStations: {
+          title: 'Workflow Stations',
+          description: 'Lädt Stationsdaten aus dem pendler-alarm.de Backend, die für zusätzliche Bahnhofsdetails genutzt werden.',
+        },
+        nextbike: {
+          title: 'nextbike Live',
+          description: 'Lädt verfügbare Sharing-Stationen und Fahrradbestände für die Sharing-Empfehlungen.',
+        },
+        trainIspCheck: {
+          title: 'Train ISP Check',
+          description: 'Prüft über einen Hilfsdienst, ob die aktuelle Netzwerkverbindung auf eine Zugumgebung hindeutet.',
+        },
+        browserGeolocation: {
+          title: 'Browser Geolocation',
+          description: 'Liest den aktuellen Standort direkt über die Standortfunktion des Browsers aus, ohne dass dafür ein eigener externer API-Endpunkt nötig ist.',
+        },
+        observed: {
+          title: 'Beobachteter Request',
+          description: 'Automatisch aus der API-Debug-Historie erkannter Request, der nicht in der statischen Liste hinterlegt war.',
+        },
+        appLocale: {
+          title: 'Sprache',
+          description: 'Speichert die gewählte Sprache der Oberfläche.',
+        },
+        calendarSource: {
+          title: 'Kalenderquelle',
+          description: 'Merkt sich, ob Google OAuth oder eine iCal-URL als Kalenderquelle genutzt wird.',
+        },
+        reminderLead: {
+          title: 'Erinnerungsvorlauf',
+          description: 'Speichert den gewünschten Vorlauf für Erinnerungen in Minuten.',
+        },
+        sharingPreferences: {
+          title: 'Sharing-Einstellungen',
+          description: 'Speichert Anbieter, Suchradius und Distanzgrenzen für Sharing-Vorschläge.',
+        },
+        connectionBuffer: {
+          title: 'Termin-Puffer',
+          description: 'Speichert individuelle Pufferzeiten pro Termin für die Verbindungsberechnung.',
+        },
+        deutschlandticket: {
+          title: 'Deutschlandticket',
+          description: 'Speichert, ob das Deutschlandticket in den Routing-Einstellungen berücksichtigt werden soll.',
+        },
+        transferWalkNodes: {
+          title: 'Fußweg-Details',
+          description: 'Speichert, ob interne Fußweg-Knoten in Routen detaillierter angezeigt werden sollen.',
+        },
+        bahnBookingClass: {
+          title: 'Bahn-Klasse',
+          description: 'Speichert die bevorzugte Buchungsklasse für die Verbindungsansicht.',
+        },
+        bahnTravelerProfile: {
+          title: 'Bahn-Reiseprofil',
+          description: 'Speichert das aktuell gesetzte Reiseprofil für bahnbezogene Abfragen.',
+        },
+        setupVisit: {
+          title: 'Setup-Hinweis',
+          description: 'Merkt sich, ob der initiale Einrichtungsdialog bereits angezeigt wurde.',
+        },
+        geoCache: {
+          title: 'Geo-Cache',
+          description: 'Zwischenspeichert bereits aufgelöste Orte und Koordinaten lokal im Browser.',
+        },
+        connectionCache: {
+          title: 'Verbindungs-Cache',
+          description: 'Zwischenspeichert bereits berechnete Verbindungen samt Verlauf lokal im Browser.',
+        },
+        calendarEventsCache: {
+          title: 'Kalender-Cache',
+          description: 'Speichert zuletzt geladene Termine, damit sie bei Bedarf erneut angezeigt werden können.',
+        },
+        appVersion: {
+          title: 'App-Version',
+          description: 'Merkt sich die zuletzt bekannte App-Version für Service-Worker- und Update-Logik.',
+        },
+        apiMetrics: {
+          title: 'API-Debug-Historie',
+          description: 'Speichert Request-Zähler und Debug-Historie für die lokale API-Ansicht.',
+        },
+        originPreferences: {
+          title: 'Startort-Favoriten',
+          description: 'Speichert Startort-Modus, feste Startadresse und gespeicherte Favoriten.',
+        },
+        googleAuthSession: {
+          title: 'Google-Session',
+          description: 'Temporäre Session-Daten für Google OAuth im SessionStorage.',
+        },
+        serviceWorkerReload: {
+          title: 'Reload-Flag',
+          description: 'Temporäres SessionStorage-Flag zur Steuerung von Reloads bei Worker-Updates.',
+        },
+      },
     },
     test: {
       title: 'Testansicht',

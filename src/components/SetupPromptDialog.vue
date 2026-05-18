@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { SETUP_VISIT_STORAGE_KEY } from '@/features/privacy/privacy';
 import { localStorageStore } from '@/lib/storage';
 
 type InstallPromptEvent = Event & {
@@ -14,7 +15,6 @@ type NotificationState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsuppor
 type InstallHelpMode = 'prompt' | 'ios' | 'manual';
 
 const { t } = useI18n();
-const SETUP_VISIT_KEY = 'pendler-alarm.setup-visit-seen';
 const deferredPrompt = ref<InstallPromptEvent | null>(null);
 const locationState = ref<LocationState>('unknown');
 const dismissed = ref(false);
@@ -159,8 +159,8 @@ onMounted(async () => {
   updateStandalone();
   detectInstallHelpMode();
   if (typeof window !== 'undefined') {
-    hasVisitedBefore.value = localStorageStore.getBoolean(SETUP_VISIT_KEY) ?? false;
-    localStorageStore.setBoolean(SETUP_VISIT_KEY, true);
+    hasVisitedBefore.value = localStorageStore.getBoolean(SETUP_VISIT_STORAGE_KEY) ?? false;
+    localStorageStore.setBoolean(SETUP_VISIT_STORAGE_KEY, true);
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener);
     window.addEventListener('appinstalled', onInstalled);
   }

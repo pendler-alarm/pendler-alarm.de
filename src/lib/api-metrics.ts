@@ -1,4 +1,5 @@
 /* eslint-disable local-i18n/no-hardcoded-text */
+import { API_METRICS_STORAGE_KEY } from '@/features/privacy/privacy';
 import { localStorageStore } from '@/lib/storage';
 
 export type ApiRequestType = 'motis' | 'googleCalendar' | 'sharing';
@@ -41,7 +42,6 @@ export type ApiMetrics = {
   history: ApiRequestHistoryEntry[];
 };
 
-const STORAGE_KEY = 'pendler_alarm_api_metrics_v1';
 const MAX_HISTORY_ENTRIES = 120;
 const MAX_JSON_DEPTH = 5;
 const MAX_ARRAY_ITEMS = 8;
@@ -229,7 +229,7 @@ const normalizeHistoryEntry = (entry: Partial<ApiRequestHistoryEntry> | null | u
   };
 };
 
-const loadMetrics = (): ApiMetrics => localStorageStore.getJson(STORAGE_KEY, (value) => {
+const loadMetrics = (): ApiMetrics => localStorageStore.getJson(API_METRICS_STORAGE_KEY, (value) => {
   const parsed = value as Partial<ApiMetrics> | null;
 
   return {
@@ -249,7 +249,7 @@ const loadMetrics = (): ApiMetrics => localStorageStore.getJson(STORAGE_KEY, (va
 let metrics: ApiMetrics = loadMetrics();
 
 const saveMetrics = (): void => {
-  localStorageStore.setJson(STORAGE_KEY, metrics);
+  localStorageStore.setJson(API_METRICS_STORAGE_KEY, metrics);
 };
 
 export const getApiMetrics = (): ApiMetrics => ({
@@ -344,7 +344,7 @@ export const annotateApiRequest = (
 
 export const clearApiRequestHistory = (): ApiMetrics => {
   metrics = { ...defaultMetrics };
-  localStorageStore.remove(STORAGE_KEY);
+  localStorageStore.remove(API_METRICS_STORAGE_KEY);
 
   return getApiMetrics();
 };
