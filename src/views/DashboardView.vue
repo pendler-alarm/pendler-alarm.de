@@ -351,7 +351,6 @@ const trainCarrierLabel = computed(() => trainDetection.value?.carrierName
 const trainNameLabel = computed(() => trainDetection.value?.trainType
   ? t('views.dashboard.events.currentLocation.trainNameLabel', { value: trainDetection.value.trainType })
   : null);
-const hasCurrentLocationCoordinates = computed(() => Boolean(currentLocation.value?.coordinates));
 const currentLocationMapLink = computed(() => {
   const coordinates = currentLocation.value?.coordinates;
 
@@ -372,20 +371,22 @@ const currentLocationCoordinateLabel = computed(() => currentLocation.value?.coo
     value: formatCoordinates(currentLocation.value.coordinates),
   })
   : null);
-const currentLocationMapStyle = computed(() => {
+const currentLocationMapEmbedUrl = computed(() => {
   const coordinates = currentLocation.value?.coordinates;
 
   if (!coordinates) {
-    return undefined;
+    return null;
   }
 
-  const latOffset = ((coordinates.lat + 90) / 180) * 100;
-  const lonOffset = ((coordinates.lon + 180) / 360) * 100;
+  const deltaLat = 0.006;
+  const deltaLon = 0.012;
+  const params = new URLSearchParams({
+    bbox: `${coordinates.lon - deltaLon},${coordinates.lat - deltaLat},${coordinates.lon + deltaLon},${coordinates.lat + deltaLat}`,
+    layer: 'mapnik',
+    marker: `${coordinates.lat},${coordinates.lon}`,
+  });
 
-  return {
-    '--map-pin-x': `${lonOffset.toFixed(2)}%`,
-    '--map-pin-y': `${(100 - latOffset).toFixed(2)}%`,
-  };
+  return `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
 });
 const hasCdTrainRoute = computed(() => originMode.value === 'current' && Boolean(trainDetection.value?.carrierName));
 const routeEtaMinutes = computed(() => {
@@ -420,6 +421,34 @@ const routeEtaLabel = computed(() => {
 const routeEtaValueLabel = computed(() => routeEtaMinutes.value !== null
   ? t('views.dashboard.events.currentLocation.routeEtaValue', { value: routeEtaMinutes.value })
   : null);
+const connectionRoutingOrigin = computed<ResolvedLocation | null>(() => {
+  if (!hasCdTrainRoute.value) {
+    return currentLocation.value;
+  }
+
+  const nextStationCoordinates = trainDetection.value?.nextStationCoordinates;
+
+  if (!nextStationCoordinates) {
+    return currentLocation.value;
+  }
+
+  return {
+    address: trainDetection.value?.nextStationName ?? currentLocation.value?.address ?? null,
+    coordinates: nextStationCoordinates,
+  };
+});
+const connectionRoutingDepartureNotBeforeIso = computed(() => {
+  if (!hasCdTrainRoute.value || routeEtaMinutes.value === null) {
+    return null;
+  }
+
+  return new Date(Date.now() + routeEtaMinutes.value * 60_000).toISOString();
+});
+const getConnectionRequestOptions = () => ({
+  showTransferWalkNodes: showTransferWalkNodes.value,
+  routingOrigin: connectionRoutingOrigin.value,
+  departureNotBeforeIso: connectionRoutingDepartureNotBeforeIso.value,
+});
 const notificationStatusVariant = computed<'success' | 'warning' | 'error'>(() => {
   if (notificationState.value === 'granted') {
     return 'success';
@@ -1172,7 +1201,7 @@ const refreshConnections = async (eventIds?: string[]): Promise<void> => {
     const requestToken = startConnectionRequest(event.id);
 
     try {
-      const { connection, connectionError } = await fetchEventConnection(currentLocation.value, event, { showTransferWalkNodes: showTransferWalkNodes.value });
+      const { connection, connectionError } = await fetchEventConnection(currentLocation.value, event, getConnectionRequestOptions());
 
       if (sequence !== loadSequence || !isActiveConnectionRequest(event.id, requestToken)) {
         return;
@@ -1213,7 +1242,7 @@ const loadConnections = async (
     applyCachedConnection(event);
     setConnectionLoading(event.id, true);
     const requestToken = startConnectionRequest(event.id);
-    const { connection, connectionError } = await fetchEventConnection(origin, event, { showTransferWalkNodes: showTransferWalkNodes.value });
+    const { connection, connectionError } = await fetchEventConnection(origin, event, getConnectionRequestOptions());
 
     if (sequence !== loadSequence || !isActiveConnectionRequest(event.id, requestToken)) {
       return;
@@ -1604,7 +1633,7 @@ watch(showTransferWalkNodes, () => {
         </div>
 
         <div class="origin-layout">
-          <section class="origin-map-card" :style="currentLocationMapStyle">
+          <section class="origin-map-card">
             <div class="origin-card-head">
               <strong>{{ t('views.dashboard.events.currentLocation.mapTitle') }}</strong>
               <a v-if="currentLocationMapLink" class="origin-map-link" :href="currentLocationMapLink" target="_blank" rel="noreferrer">
@@ -1612,9 +1641,15 @@ watch(showTransferWalkNodes, () => {
               </a>
             </div>
 
-            <div class="origin-map-canvas" :class="{ 'origin-map-canvas--empty': !hasCurrentLocationCoordinates }">
-              <div class="origin-map-grid"></div>
-              <div v-if="hasCurrentLocationCoordinates" class="origin-map-pin" aria-hidden="true">📍</div>
+            <div class="origin-map-canvas" :class="{ 'origin-map-canvas--empty': !currentLocationMapEmbedUrl }">
+              <iframe
+                v-if="currentLocationMapEmbedUrl"
+                class="origin-map-frame"
+                :src="currentLocationMapEmbedUrl"
+                :title="t('views.dashboard.events.currentLocation.mapTitle')"
+                loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade"
+              />
             </div>
 
             <div class="origin-map-meta">
@@ -2156,37 +2191,21 @@ watch(showTransferWalkNodes, () => {
 }
 
 .origin-map-canvas {
-  position: relative;
   min-height: 220px;
   overflow: hidden;
   border-radius: 16px;
-  background:
-    radial-gradient(circle at 20% 20%, rgba(125, 211, 252, 0.32), transparent 30%),
-    radial-gradient(circle at 80% 70%, rgba(74, 222, 128, 0.22), transparent 24%),
-    linear-gradient(135deg, rgba(224, 242, 254, 0.9), rgba(191, 219, 254, 0.78));
+  background: rgba(15, 23, 42, 0.16);
 }
 
 .origin-map-canvas--empty {
   background: linear-gradient(135deg, rgba(148, 163, 184, 0.28), rgba(100, 116, 139, 0.18));
 }
 
-.origin-map-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.08) 1px, transparent 1px),
-    linear-gradient(35deg, rgba(59, 130, 246, 0.12) 0 2px, transparent 2px);
-  background-size: 36px 36px, 36px 36px, 120px 120px;
-}
-
-.origin-map-pin {
-  position: absolute;
-  left: var(--map-pin-x, 50%);
-  top: var(--map-pin-y, 50%);
-  transform: translate(-50%, -100%);
-  font-size: 2rem;
-  filter: drop-shadow(0 10px 18px rgba(190, 24, 93, 0.28));
+.origin-map-frame {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  border: 0;
 }
 
 .origin-map-meta {

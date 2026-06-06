@@ -421,6 +421,7 @@ const getIsoMs = (value?: string): number => {
 const pickItineraries = (
   itineraries: MotisItinerary[],
   latestArrivalIso?: string,
+  earliestDepartureIso?: string,
   maxConnections = DEFAULT_MAX_CONNECTIONS,
 ): MotisItinerary[] => {
   const validItineraries = itineraries.filter((candidate) => Array.isArray(candidate.legs) && candidate.legs.length > 0);
@@ -431,14 +432,35 @@ const pickItineraries = (
 
   if (!latestArrivalIso) {
     return validItineraries
+      .filter((candidate) => {
+        if (!earliestDepartureIso) {
+          return true;
+        }
+
+        return getIsoMs(getDepartureIso(candidate, getFirstLeg(candidate))) >= getIsoMs(earliestDepartureIso);
+      })
       .sort((left, right) => getIsoMs(getDepartureIso(left, getFirstLeg(left))) - getIsoMs(getDepartureIso(right, getFirstLeg(right))))
       .slice(0, maxConnections);
   }
 
   const latestArrivalMs = getIsoMs(latestArrivalIso);
+  const earliestDepartureMs = earliestDepartureIso ? getIsoMs(earliestDepartureIso) : Number.NaN;
 
   return validItineraries
-    .filter((candidate) => getIsoMs(getArrivalIso(candidate, getLastLeg(candidate))) <= latestArrivalMs)
+    .filter((candidate) => {
+      const arrivalMs = getIsoMs(getArrivalIso(candidate, getLastLeg(candidate)));
+      const departureMs = getIsoMs(getDepartureIso(candidate, getFirstLeg(candidate)));
+
+      if (arrivalMs > latestArrivalMs) {
+        return false;
+      }
+
+      if (earliestDepartureIso && departureMs < earliestDepartureMs) {
+        return false;
+      }
+
+      return true;
+    })
     .sort((left, right) => getIsoMs(getDepartureIso(right, getFirstLeg(right))) - getIsoMs(getDepartureIso(left, getFirstLeg(left))))
     .slice(0, maxConnections);
 };
@@ -477,6 +499,7 @@ export const buildConnectionSummaryFromPlanResponse = (
   const itineraries = pickItineraries(
     extractItineraries(payload as MotisPlanResponse),
     options.latestArrivalIso,
+    options.earliestDepartureIso,
     options.maxConnections,
   );
 

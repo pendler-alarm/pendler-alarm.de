@@ -147,6 +147,7 @@ export type ConnectionSummary = ConnectionOption & {
 export type FetchConnectionOptions = {
   time?: string;
   latestArrivalIso?: string;
+  earliestDepartureIso?: string;
   arriveBy?: boolean;
   maxConnections?: number;
   searchWindowMinutes?: number;

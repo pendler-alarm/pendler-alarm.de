@@ -422,7 +422,11 @@ const isUpcomingEvent = (event: GoogleCalendarEvent): boolean => {
 export const fetchEventConnection = async (
   origin: ResolvedLocation | null | undefined,
   event: GoogleCalendarEvent,
-  options: { showTransferWalkNodes?: boolean } = {},
+  options: {
+    showTransferWalkNodes?: boolean;
+    routingOrigin?: ResolvedLocation | null;
+    departureNotBeforeIso?: string | null;
+  } = {},
 ): Promise<{ connection: ConnectionSummary | null; connectionError: string | null }> => {
   if (!event.locationAddress && !event.locationCoordinates) {
     return {
@@ -431,7 +435,9 @@ export const fetchEventConnection = async (
     };
   }
 
-  if (!origin?.coordinates) {
+  const routingOrigin = options.routingOrigin?.coordinates ? options.routingOrigin : origin;
+
+  if (!routingOrigin?.coordinates) {
     return {
       connection: null,
       connectionError: translate('calendar.connection.originUnavailable'),
@@ -452,7 +458,7 @@ export const fetchEventConnection = async (
     };
   }
 
-  const originCoordinates = origin.coordinates;
+  const originCoordinates = routingOrigin.coordinates;
   const destinationCoordinates = event.locationCoordinates;
 
   try {
@@ -465,11 +471,14 @@ export const fetchEventConnection = async (
 
     const loadConnectionForBuffer = async (bufferMinutes: number): Promise<ConnectionSummary | null> => {
       const latestArrivalIso = getLatestArrivalIso(event, bufferMinutes);
+      const earliestDepartureIso = options.departureNotBeforeIso ?? undefined;
+      const useEarliestDeparture = Boolean(earliestDepartureIso);
 
       return fetchNextConnection(originCoordinates, destinationCoordinates, {
-        time: latestArrivalIso,
+        time: earliestDepartureIso ?? latestArrivalIso,
         latestArrivalIso,
-        arriveBy: true,
+        earliestDepartureIso,
+        arriveBy: !useEarliestDeparture,
         maxConnections: MAX_CONNECTION_OPTIONS,
         searchWindowMinutes: CONNECTION_SEARCH_WINDOW_MINUTES,
         showTransferWalkNodes: options.showTransferWalkNodes,
@@ -487,7 +496,7 @@ export const fetchEventConnection = async (
 
     if (connection) {
       const delayPrediction = connection.departureIso
-        ? await fetchDelayPrediction(origin.coordinates, event.locationCoordinates, connection.departureIso)
+        ? await fetchDelayPrediction(originCoordinates, event.locationCoordinates, connection.departureIso)
         : null;
 
       return {
