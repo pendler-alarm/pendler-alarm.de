@@ -1,3 +1,4 @@
+import { CD_CARRIER_LOGO_ICON, CD_CARRIER_NAME, fetchCdTrainContext, isCdWifiIsp } from '@/features/motis/cd-train-service';
 import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
 import { TRAIN_ISP_CHECK_API_CHECK } from '@/utils/constants/api';
 import type { ResolvedLocation } from '@/features/motis/location-service';
@@ -19,31 +20,36 @@ type TrainIspCheckResponse = {
 };
 
 export type TrainIspCheckContext = {
-  reachable: boolean;
-  isTrainLikely: boolean;
-  ip: string | null;
-  isp: string | null;
   error: string | null;
+  ip: string | null;
+  isCdWifi: boolean;
+  isTrainLikely: boolean;
+  isp: string | null;
+  reachable: boolean;
 };
 
 export type TrainLocationContext = {
-  isProbablyOnTrain: boolean;
+  carrierLogoIcon: string | null;
+  carrierName: string | null;
+  connectionType: string | null;
+  connectivityState: string | null;
+  downlinkMbps: number | null;
+  effectiveType: string | null;
+  finalStationName: string | null;
   icePortalReachable: boolean;
-  trainIspReachable: boolean;
+  internetQuality: string | null;
+  isProbablyOnTrain: boolean;
+  nextStationName: string | null;
+  originStationName: string | null;
+  resolvedLocation: ResolvedLocation | null;
+  roundTripTimeMs: number | null;
+  speedKmh: number | null;
+  trainIspIp: string | null;
   trainIspLikely: boolean;
   trainIspProvider: string | null;
-  trainIspIp: string | null;
-  resolvedLocation: ResolvedLocation | null;
-  speedKmh: number | null;
-  connectionType: string | null;
-  effectiveType: string | null;
-  downlinkMbps: number | null;
-  roundTripTimeMs: number | null;
-  trainType: string | null;
+  trainIspReachable: boolean;
   trainNumber: string | null;
-  finalStationName: string | null;
-  internetQuality: string | null;
-  connectivityState: string | null;
+  trainType: string | null;
 };
 
 const isFiniteNumber = (value: unknown): value is number =>
@@ -101,11 +107,12 @@ export const checkTrainIspStatus = async (): Promise<TrainIspCheckContext> => {
     }
 
     return {
-      reachable: true,
-      isTrainLikely: json.isTrainLikely === true,
-      ip: json.ip?.trim() || null,
-      isp: json.isp?.trim() || null,
       error: null,
+      ip: json.ip?.trim() || null,
+      isCdWifi: isCdWifiIsp(json.isp),
+      isTrainLikely: json.isTrainLikely === true,
+      isp: json.isp?.trim() || null,
+      reachable: true,
     };
   } catch (error) {
     finishApiRequest(requestId, 'error', null, {
@@ -114,11 +121,12 @@ export const checkTrainIspStatus = async (): Promise<TrainIspCheckContext> => {
     });
 
     return {
-      reachable: false,
-      isTrainLikely: false,
-      ip: null,
-      isp: null,
       error: error instanceof Error ? error.message : 'train-isp-check-error',
+      ip: null,
+      isCdWifi: false,
+      isTrainLikely: false,
+      isp: null,
+      reachable: false,
     };
   }
 };
@@ -126,24 +134,31 @@ export const checkTrainIspStatus = async (): Promise<TrainIspCheckContext> => {
 export const detectTrainLocation = async (): Promise<TrainLocationContext> => {
   const network = getBrowserNetworkInformation();
   const trainIspStatus = await checkTrainIspStatus();
+  const cdTrainContext = trainIspStatus.reachable && trainIspStatus.isCdWifi
+    ? await fetchCdTrainContext().catch(() => null)
+    : null;
 
   return {
-    isProbablyOnTrain: trainIspStatus.reachable && trainIspStatus.isTrainLikely,
-    icePortalReachable: false,
-    trainIspReachable: trainIspStatus.reachable,
-    trainIspLikely: trainIspStatus.isTrainLikely,
-    trainIspProvider: trainIspStatus.isp,
-    trainIspIp: trainIspStatus.ip,
-    resolvedLocation: null,
-    speedKmh: null,
+    carrierLogoIcon: cdTrainContext?.carrierLogoIcon ?? (trainIspStatus.isCdWifi ? CD_CARRIER_LOGO_ICON : null),
+    carrierName: cdTrainContext?.carrierName ?? (trainIspStatus.isCdWifi ? CD_CARRIER_NAME() : null),
     connectionType: network?.type ?? null,
-    effectiveType: network?.effectiveType ?? null,
-    downlinkMbps: isFiniteNumber(network?.downlink) ? network.downlink : null,
-    roundTripTimeMs: isFiniteNumber(network?.rtt) ? network.rtt : null,
-    trainType: null,
-    trainNumber: null,
-    finalStationName: null,
-    internetQuality: null,
     connectivityState: null,
+    downlinkMbps: isFiniteNumber(network?.downlink) ? network.downlink : null,
+    effectiveType: network?.effectiveType ?? null,
+    finalStationName: cdTrainContext?.finalStationName ?? null,
+    icePortalReachable: false,
+    internetQuality: null,
+    isProbablyOnTrain: trainIspStatus.reachable && (trainIspStatus.isTrainLikely || trainIspStatus.isCdWifi),
+    nextStationName: cdTrainContext?.nextStationName ?? null,
+    originStationName: cdTrainContext?.originStationName ?? null,
+    resolvedLocation: cdTrainContext?.resolvedLocation ?? null,
+    roundTripTimeMs: isFiniteNumber(network?.rtt) ? network.rtt : null,
+    speedKmh: cdTrainContext?.speedKmh ?? null,
+    trainIspIp: trainIspStatus.ip,
+    trainIspLikely: trainIspStatus.isTrainLikely || trainIspStatus.isCdWifi,
+    trainIspProvider: trainIspStatus.isp,
+    trainIspReachable: trainIspStatus.reachable,
+    trainNumber: null,
+    trainType: cdTrainContext?.trainName ?? null,
   };
 };

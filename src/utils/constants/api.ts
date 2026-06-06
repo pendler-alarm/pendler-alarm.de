@@ -5,6 +5,7 @@ const MOTIS_API = 'https://api.transitous.org';
 const PENDLER_ALARM_API = 'https://ola-vm.duckdns.org';
 const TRAIN_ISP_CHECK_API = 'https://train-isp-check.vercel.app';
 const NEXTBIKE_API = 'https://maps.nextbike.net/maps/nextbike-live.json';
+const CD_WIFI_API = 'http://cdwifi.cz';
 const GEOLOCATION_API = 'navigator.geolocation';
 
 export const GOOGLE_IDENTITY_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
@@ -13,6 +14,7 @@ export const GOOGLE_CALENDAR_SCOPE = `${GOOGLE_API}/auth/calendar`;
 export type PrivacyItemType = 'api' | 'localStorage' | 'sessionStorage';
 export type PrivacyProviderKey =
   | 'browser'
+  | 'cdWifi'
   | 'google'
   | 'nextbike'
   | 'pendlerAlarm'
@@ -123,6 +125,24 @@ export const PRIVACY_ITEMS = [
     icon: 'material/train',
   },
   {
+    key: 'cdWifiRealtime',
+    type: 'api',
+    url: `${CD_WIFI_API}/portal/api/vehicle/realtime`,
+    requestType: 'motis',
+    labels: ['cdwifi-realtime'],
+    provider: 'cdWifi',
+    icon: 'providers/cd',
+  },
+  {
+    key: 'cdWifiCurrent',
+    type: 'api',
+    url: `${CD_WIFI_API}/portal/api/timetable/connexion/current`,
+    requestType: 'motis',
+    labels: ['cdwifi-current'],
+    provider: 'cdWifi',
+    icon: 'providers/cd',
+  },
+  {
     key: 'browserGeolocation',
     type: 'api',
     url: GEOLOCATION_API,
@@ -184,6 +204,8 @@ export const MOTIS_API_PLAN = getApiUrl('motisPlan');
 export const PENDLER_ALARM_API_DELAY_PREDICTIONS = getApiUrl('delayPredictions');
 export const PENDLER_ALARM_API_WORKFLOW_STATIONS = getApiUrl('workflowStations');
 export const TRAIN_ISP_CHECK_API_CHECK = getApiUrl('trainIspCheck');
+export const CD_WIFI_API_REALTIME = getApiUrl('cdWifiRealtime');
+export const CD_WIFI_API_CURRENT = getApiUrl('cdWifiCurrent');
 
 export const APP_LOCALE_STORAGE_KEY = getStorageKey('appLocale');
 export const CALENDAR_SOURCE_STORAGE_KEY = getStorageKey('calendarSource');

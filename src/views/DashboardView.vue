@@ -257,6 +257,10 @@ const currentLocationSourceLabel = computed(() => {
     return t('views.dashboard.events.currentLocation.sourceFixed');
   }
 
+  if (trainDetection.value?.carrierName) {
+    return t('views.dashboard.events.currentLocation.sourceCd');
+  }
+
   if (trainDetection.value?.icePortalReachable) {
     return t('views.dashboard.events.currentLocation.sourceTrain');
   }
@@ -264,7 +268,7 @@ const currentLocationSourceLabel = computed(() => {
   return t('views.dashboard.events.currentLocation.sourceCurrent');
 });
 const trainPortalLabel = computed(() => {
-  if (originMode.value != 'current') {
+  if (originMode.value != 'current' || trainDetection.value?.carrierName) {
     return null;
   }
 
@@ -328,6 +332,19 @@ const browserTrainIspLabel = computed(() => {
     ? t('views.dashboard.events.currentLocation.trainIspLabel', { value: provider })
     : null;
 });
+const trainCarrierIcon = computed(() => trainDetection.value?.carrierLogoIcon ?? null);
+const trainCarrierLabel = computed(() => trainDetection.value?.carrierName
+  ? t('views.dashboard.events.currentLocation.carrierLabel', { value: trainDetection.value.carrierName })
+  : null);
+const trainNameLabel = computed(() => trainDetection.value?.trainType
+  ? t('views.dashboard.events.currentLocation.trainNameLabel', { value: trainDetection.value.trainType })
+  : null);
+const trainOriginStationLabel = computed(() => trainDetection.value?.originStationName
+  ? t('views.dashboard.events.currentLocation.originStationLabel', { value: trainDetection.value.originStationName })
+  : null);
+const trainNextStationLabel = computed(() => trainDetection.value?.nextStationName
+  ? t('views.dashboard.events.currentLocation.nextStationLabel', { value: trainDetection.value.nextStationName })
+  : null);
 const notificationStatusVariant = computed<'success' | 'warning' | 'error'>(() => {
   if (notificationState.value === 'granted') {
     return 'success';
@@ -1514,8 +1531,15 @@ watch(showTransferWalkNodes, () => {
         <span class="origin-source">{{ t('views.dashboard.events.currentLocation.locationSource', {
           value:
           currentLocationSourceLabel }) }}</span>
+        <div v-if="trainCarrierLabel" class="origin-train-brand">
+          <SvgIcon v-if="trainCarrierIcon" :icon="trainCarrierIcon" dimension="20" fallback-text="CD" />
+          <span>{{ trainCarrierLabel }}</span>
+        </div>
         <span v-if="currentLocation?.address">🏠 {{ currentLocation.address }}</span>
         <span v-if="currentLocation?.coordinates">🧭 {{ formatCoordinates(currentLocation.coordinates) }}</span>
+        <span v-if="trainNameLabel">🚄 {{ trainNameLabel }}</span>
+        <span v-if="trainOriginStationLabel">🏁 {{ trainOriginStationLabel }}</span>
+        <span v-if="trainNextStationLabel">📍 {{ trainNextStationLabel }}</span>
         <span v-if="browserTrainStatusLabel">🚦 {{ browserTrainStatusLabel }}</span>
         <span v-if="browserTrainIspLabel">🌐 {{ browserTrainIspLabel }}</span>
         <span v-if="trainPortalLabel">🚆 {{ trainPortalLabel }}</span>
@@ -1951,6 +1975,18 @@ watch(showTransferWalkNodes, () => {
 
 .current-location span {
   color: var(--calendar-state-empty);
+}
+
+.origin-train-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--calendar-state-empty);
+  font-weight: 700;
+}
+
+.origin-train-brand span {
+  color: inherit;
 }
 
 .origin-mode-switch {

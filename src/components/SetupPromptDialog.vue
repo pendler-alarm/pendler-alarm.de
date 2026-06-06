@@ -44,9 +44,9 @@ const showDialog = computed(() =>
 const updateStandalone = (): void => {
   if (typeof window === 'undefined') return;
   const nav = window.navigator as Navigator & { standalone?: boolean };
-  // eslint-disable-next-line local-i18n/no-hardcoded-text
+   
   isStandalone.value = nav.standalone === true
-    // eslint-disable-next-line local-i18n/no-hardcoded-text
+     
     || document.referrer.startsWith('android-app://')
     // eslint-disable-next-line local-i18n/no-hardcoded-text
     || window.matchMedia('(display-mode: standalone)').matches
