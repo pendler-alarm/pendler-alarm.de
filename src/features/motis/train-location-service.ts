@@ -1,7 +1,7 @@
 import { CD_CARRIER_LOGO_ICON, CD_CARRIER_NAME, fetchCdTrainContext, isCdWifiIsp } from '@/features/motis/cd-train-service';
 import { finishApiRequest, startApiRequest } from '@/lib/api-metrics';
 import { TRAIN_ISP_CHECK_API_CHECK } from '@/utils/constants/api';
-import type { ResolvedLocation } from '@/features/motis/location-service';
+import type { Coordinates, ResolvedLocation } from '@/features/motis/location-service';
 
 const TRAIN_ISP_CHECK_URL = TRAIN_ISP_CHECK_API_CHECK;
 const REQUEST_TIMEOUT_MS = 4_000;
@@ -39,6 +39,7 @@ export type TrainLocationContext = {
   icePortalReachable: boolean;
   internetQuality: string | null;
   isProbablyOnTrain: boolean;
+  nextStationCoordinates: Coordinates | null;
   nextStationName: string | null;
   originStationName: string | null;
   resolvedLocation: ResolvedLocation | null;
@@ -149,6 +150,7 @@ export const detectTrainLocation = async (): Promise<TrainLocationContext> => {
     icePortalReachable: false,
     internetQuality: null,
     isProbablyOnTrain: trainIspStatus.reachable && (trainIspStatus.isTrainLikely || trainIspStatus.isCdWifi),
+    nextStationCoordinates: cdTrainContext?.nextStationCoordinates ?? null,
     nextStationName: cdTrainContext?.nextStationName ?? null,
     originStationName: cdTrainContext?.originStationName ?? null,
     resolvedLocation: cdTrainContext?.resolvedLocation ?? null,

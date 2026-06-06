@@ -34,6 +34,7 @@ export type CdTrainContext = {
   carrierLogoIcon: string;
   carrierName: string;
   finalStationName: string | null;
+  nextStationCoordinates: Coordinates | null;
   nextStationName: string | null;
   originStationName: string | null;
   resolvedLocation: ResolvedLocation | null;
@@ -202,6 +203,9 @@ export const fetchCdTrainContext = async (): Promise<CdTrainContext> => {
     carrierLogoIcon: CD_CARRIER_LOGO_ICON,
     carrierName: CD_CARRIER_NAME(),
     finalStationName: getFinalStationName(entries),
+    nextStationCoordinates: getStationCoordinates(
+      (entries.find((entry) => entry.state !== COMPLETED_STATE) ?? entries[entries.length - 1])?.station,
+    ),
     nextStationName: getNextStationName(entries),
     originStationName: getOriginStationName(entries),
     resolvedLocation: toResolvedLocation(coordinates, entries),

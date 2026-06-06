@@ -23,6 +23,7 @@ import {
   getCurrentResolvedLocation,
   resolveLocation,
   searchLocationSuggestions,
+  type Coordinates,
   type LocationSuggestion,
   type ResolvedLocation,
 } from '@/features/motis/location-service';
@@ -238,6 +239,20 @@ const travelerProfileSummaryLabel = computed(() => {
 
   return bahnTravelerProfileParam.value;
 });
+const toRadians = (value: number): number => value * (Math.PI / 180);
+
+const getDistanceMeters = (from: Coordinates, to: Coordinates): number => {
+  const earthRadiusMeters = 6_371_000;
+  const latDelta = toRadians(to.lat - from.lat);
+  const lonDelta = toRadians(to.lon - from.lon);
+  const fromLat = toRadians(from.lat);
+  const toLat = toRadians(to.lat);
+  const haversine = Math.sin(latDelta / 2) ** 2
+    + Math.cos(fromLat) * Math.cos(toLat) * Math.sin(lonDelta / 2) ** 2;
+
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+};
+
 const settingsSummaryLabel = computed(() => t('views.dashboard.events.settings.summary', {
   deutschlandticket: deutschlandticketEnabled.value
     ? t('views.dashboard.events.settings.deutschlandticketEnabled')
@@ -299,9 +314,6 @@ const trainConnectionLabel = computed(() => {
     ? t('views.dashboard.events.currentLocation.connectionLabel', { value: parts.join(' / ') })
     : null;
 });
-const trainFinalStationLabel = computed(() => trainDetection.value?.finalStationName
-  ? t('views.dashboard.events.currentLocation.finalStationLabel', { value: trainDetection.value.finalStationName })
-  : null);
 const browserTrainStatusLabel = computed(() => {
   if (originMode.value !== 'current') {
     return null;
@@ -339,11 +351,74 @@ const trainCarrierLabel = computed(() => trainDetection.value?.carrierName
 const trainNameLabel = computed(() => trainDetection.value?.trainType
   ? t('views.dashboard.events.currentLocation.trainNameLabel', { value: trainDetection.value.trainType })
   : null);
-const trainOriginStationLabel = computed(() => trainDetection.value?.originStationName
-  ? t('views.dashboard.events.currentLocation.originStationLabel', { value: trainDetection.value.originStationName })
+const hasCurrentLocationCoordinates = computed(() => Boolean(currentLocation.value?.coordinates));
+const currentLocationMapLink = computed(() => {
+  const coordinates = currentLocation.value?.coordinates;
+
+  if (!coordinates) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    mlat: String(coordinates.lat),
+    mlon: String(coordinates.lon),
+    zoom: '14',
+  });
+
+  return `https://www.openstreetmap.org/?${params.toString()}`;
+});
+const currentLocationCoordinateLabel = computed(() => currentLocation.value?.coordinates
+  ? t('views.dashboard.events.currentLocation.mapCoordinates', {
+    value: formatCoordinates(currentLocation.value.coordinates),
+  })
   : null);
-const trainNextStationLabel = computed(() => trainDetection.value?.nextStationName
-  ? t('views.dashboard.events.currentLocation.nextStationLabel', { value: trainDetection.value.nextStationName })
+const currentLocationMapStyle = computed(() => {
+  const coordinates = currentLocation.value?.coordinates;
+
+  if (!coordinates) {
+    return undefined;
+  }
+
+  const latOffset = ((coordinates.lat + 90) / 180) * 100;
+  const lonOffset = ((coordinates.lon + 180) / 360) * 100;
+
+  return {
+    '--map-pin-x': `${lonOffset.toFixed(2)}%`,
+    '--map-pin-y': `${(100 - latOffset).toFixed(2)}%`,
+  };
+});
+const hasCdTrainRoute = computed(() => originMode.value === 'current' && Boolean(trainDetection.value?.carrierName));
+const routeEtaMinutes = computed(() => {
+  const currentCoordinates = currentLocation.value?.coordinates;
+  const nextCoordinates = trainDetection.value?.nextStationCoordinates;
+  const speedKmh = trainDetection.value?.speedKmh;
+
+  if (!currentCoordinates || !nextCoordinates || !speedKmh || speedKmh <= 5) {
+    return null;
+  }
+
+  const distanceMeters = getDistanceMeters(currentCoordinates, nextCoordinates);
+  const metersPerMinute = (speedKmh * 1000) / 60;
+
+  if (!Number.isFinite(distanceMeters) || metersPerMinute <= 0) {
+    return null;
+  }
+
+  return Math.max(1, Math.round(distanceMeters / metersPerMinute));
+});
+const routeEtaLabel = computed(() => {
+  const nextStationName = trainDetection.value?.nextStationName;
+
+  if (!nextStationName) {
+    return null;
+  }
+
+  return routeEtaMinutes.value !== null
+    ? t('views.dashboard.events.currentLocation.routeEtaLabel', { station: nextStationName })
+    : t('views.dashboard.events.currentLocation.routeEtaUnavailable');
+});
+const routeEtaValueLabel = computed(() => routeEtaMinutes.value !== null
+  ? t('views.dashboard.events.currentLocation.routeEtaValue', { value: routeEtaMinutes.value })
   : null);
 const notificationStatusVariant = computed<'success' | 'warning' | 'error'>(() => {
   if (notificationState.value === 'granted') {
@@ -1528,24 +1603,93 @@ watch(showTransferWalkNodes, () => {
           </div>
         </div>
 
-        <span class="origin-source">{{ t('views.dashboard.events.currentLocation.locationSource', {
-          value:
-          currentLocationSourceLabel }) }}</span>
-        <div v-if="trainCarrierLabel" class="origin-train-brand">
-          <SvgIcon v-if="trainCarrierIcon" :icon="trainCarrierIcon" dimension="20" fallback-text="CD" />
-          <span>{{ trainCarrierLabel }}</span>
+        <div class="origin-layout">
+          <section class="origin-map-card" :style="currentLocationMapStyle">
+            <div class="origin-card-head">
+              <strong>{{ t('views.dashboard.events.currentLocation.mapTitle') }}</strong>
+              <a v-if="currentLocationMapLink" class="origin-map-link" :href="currentLocationMapLink" target="_blank" rel="noreferrer">
+                {{ t('views.dashboard.events.currentLocation.mapOpen') }}
+              </a>
+            </div>
+
+            <div class="origin-map-canvas" :class="{ 'origin-map-canvas--empty': !hasCurrentLocationCoordinates }">
+              <div class="origin-map-grid"></div>
+              <div v-if="hasCurrentLocationCoordinates" class="origin-map-pin" aria-hidden="true">📍</div>
+            </div>
+
+            <div class="origin-map-meta">
+              <span class="origin-source">{{ t('views.dashboard.events.currentLocation.locationSource', { value: currentLocationSourceLabel }) }}</span>
+              <strong v-if="currentLocation?.address">{{ currentLocation.address }}</strong>
+              <span v-if="currentLocationCoordinateLabel">{{ currentLocationCoordinateLabel }}</span>
+              <span v-else>{{ t('views.dashboard.events.currentLocation.mapUnavailable') }}</span>
+            </div>
+          </section>
+
+          <section class="origin-route-card">
+            <div class="origin-card-head">
+              <div>
+                <strong>{{ t('views.dashboard.events.currentLocation.routeTitle') }}</strong>
+                <p v-if="hasCdTrainRoute" class="origin-route-subtitle">{{ t('views.dashboard.events.currentLocation.routeSubtitle') }}</p>
+              </div>
+              <span v-if="hasCdTrainRoute" class="origin-live-badge">{{ t('views.dashboard.events.currentLocation.routeLiveBadge') }}</span>
+            </div>
+
+            <div v-if="hasCdTrainRoute" class="origin-route-body">
+              <div v-if="trainCarrierLabel" class="origin-train-brand origin-train-brand--hero">
+                <SvgIcon v-if="trainCarrierIcon" :icon="trainCarrierIcon" dimension="28" fallback-text="CD" />
+                <div>
+                  <strong>{{ trainCarrierLabel }}</strong>
+                  <span v-if="trainNameLabel">{{ trainNameLabel }}</span>
+                </div>
+              </div>
+
+              <div class="origin-route-line">
+                <div class="origin-route-stop origin-route-stop--start">
+                  <span class="origin-route-dot"></span>
+                  <div>
+                    <strong>{{ trainDetection?.originStationName || t('views.dashboard.events.currentLocation.routeCurrentStop') }}</strong>
+                  </div>
+                </div>
+                <div class="origin-route-progress">
+                  <span class="origin-route-progress-line"></span>
+                  <span class="origin-route-progress-train">🚆</span>
+                </div>
+                <div class="origin-route-stop origin-route-stop--current">
+                  <span class="origin-route-dot origin-route-dot--pulse"></span>
+                  <div>
+                    <strong>{{ currentLocation?.address || t('views.dashboard.events.currentLocation.routeCurrentStop') }}</strong>
+                    <span v-if="routeEtaLabel">{{ routeEtaLabel }}</span>
+                    <span v-if="routeEtaValueLabel" class="origin-route-eta">{{ routeEtaValueLabel }}</span>
+                  </div>
+                </div>
+                <div class="origin-route-progress">
+                  <span class="origin-route-progress-line"></span>
+                </div>
+                <div class="origin-route-stop origin-route-stop--end">
+                  <span class="origin-route-dot origin-route-dot--outline"></span>
+                  <div>
+                    <strong>{{ trainDetection?.nextStationName || trainDetection?.finalStationName || t('views.dashboard.events.currentLocation.routeCurrentStop') }}</strong>
+                    <span v-if="trainDetection?.finalStationName">{{ t('views.dashboard.events.currentLocation.finalStationLabel', { value: trainDetection.finalStationName }) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="origin-route-facts">
+                <span v-if="trainSpeedLabel">{{ trainSpeedLabel }}</span>
+                <span v-if="trainConnectionLabel">{{ trainConnectionLabel }}</span>
+                <span v-if="browserTrainIspLabel">{{ browserTrainIspLabel }}</span>
+                <span v-if="browserTrainStatusLabel">{{ browserTrainStatusLabel }}</span>
+                <span v-if="trainPortalLabel">{{ trainPortalLabel }}</span>
+              </div>
+            </div>
+
+            <div v-else class="origin-route-fallback">
+              <span v-if="browserTrainStatusLabel">{{ browserTrainStatusLabel }}</span>
+              <span v-if="browserTrainIspLabel">{{ browserTrainIspLabel }}</span>
+              <span>{{ t('views.dashboard.events.currentLocation.routeFallback') }}</span>
+            </div>
+          </section>
         </div>
-        <span v-if="currentLocation?.address">🏠 {{ currentLocation.address }}</span>
-        <span v-if="currentLocation?.coordinates">🧭 {{ formatCoordinates(currentLocation.coordinates) }}</span>
-        <span v-if="trainNameLabel">🚄 {{ trainNameLabel }}</span>
-        <span v-if="trainOriginStationLabel">🏁 {{ trainOriginStationLabel }}</span>
-        <span v-if="trainNextStationLabel">📍 {{ trainNextStationLabel }}</span>
-        <span v-if="browserTrainStatusLabel">🚦 {{ browserTrainStatusLabel }}</span>
-        <span v-if="browserTrainIspLabel">🌐 {{ browserTrainIspLabel }}</span>
-        <span v-if="trainPortalLabel">🚆 {{ trainPortalLabel }}</span>
-        <span v-if="trainSpeedLabel">{{ trainSpeedLabel }}</span>
-        <span v-if="trainConnectionLabel">{{ trainConnectionLabel }}</span>
-        <span v-if="trainFinalStationLabel">{{ trainFinalStationLabel }}</span>
       </div>
 
       <details class="sharing-settings">
@@ -1965,16 +2109,117 @@ watch(showTransferWalkNodes, () => {
 
 .current-location {
   display: grid;
-  gap: 6px;
+  gap: 14px;
   margin-bottom: 16px;
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: rgba(143, 188, 187, 0.14);
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(143, 188, 187, 0.16), rgba(37, 99, 235, 0.08));
   border: 1px solid rgba(143, 188, 187, 0.28);
 }
 
 .current-location span {
   color: var(--calendar-state-empty);
+}
+
+.origin-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr);
+  gap: 16px;
+}
+
+.origin-map-card,
+.origin-route-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.origin-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.origin-card-head strong {
+  color: #f8fafc;
+}
+
+.origin-map-link {
+  color: #93c5fd;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.origin-map-canvas {
+  position: relative;
+  min-height: 220px;
+  overflow: hidden;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(125, 211, 252, 0.32), transparent 30%),
+    radial-gradient(circle at 80% 70%, rgba(74, 222, 128, 0.22), transparent 24%),
+    linear-gradient(135deg, rgba(224, 242, 254, 0.9), rgba(191, 219, 254, 0.78));
+}
+
+.origin-map-canvas--empty {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.28), rgba(100, 116, 139, 0.18));
+}
+
+.origin-map-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.08) 1px, transparent 1px),
+    linear-gradient(35deg, rgba(59, 130, 246, 0.12) 0 2px, transparent 2px);
+  background-size: 36px 36px, 36px 36px, 120px 120px;
+}
+
+.origin-map-pin {
+  position: absolute;
+  left: var(--map-pin-x, 50%);
+  top: var(--map-pin-y, 50%);
+  transform: translate(-50%, -100%);
+  font-size: 2rem;
+  filter: drop-shadow(0 10px 18px rgba(190, 24, 93, 0.28));
+}
+
+.origin-map-meta {
+  display: grid;
+  gap: 6px;
+}
+
+.origin-source {
+  color: #93c5fd;
+  font-size: 0.82rem;
+}
+
+.origin-route-subtitle {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
+.origin-live-badge {
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(220, 38, 38, 0.18);
+  color: #fecaca;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.origin-route-body,
+.origin-route-fallback {
+  display: grid;
+  gap: 14px;
 }
 
 .origin-train-brand {
@@ -1985,8 +2230,106 @@ watch(showTransferWalkNodes, () => {
   font-weight: 700;
 }
 
+.origin-train-brand--hero {
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(11, 86, 163, 0.16);
+}
+
+.origin-train-brand--hero div {
+  display: grid;
+  gap: 2px;
+}
+
 .origin-train-brand span {
   color: inherit;
+}
+
+.origin-route-line {
+  display: grid;
+  gap: 8px;
+}
+
+.origin-route-stop {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.origin-route-stop div {
+  display: grid;
+  gap: 3px;
+}
+
+.origin-route-stop strong {
+  color: #f8fafc;
+}
+
+.origin-route-dot {
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: #93c5fd;
+  box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.16);
+}
+
+.origin-route-dot--pulse {
+  background: #f43f5e;
+  box-shadow: 0 0 0 6px rgba(244, 63, 94, 0.18);
+}
+
+.origin-route-dot--outline {
+  background: transparent;
+  border: 2px solid rgba(148, 163, 184, 0.8);
+  box-shadow: none;
+}
+
+.origin-route-progress {
+  position: relative;
+  height: 18px;
+  margin-left: 5px;
+}
+
+.origin-route-progress-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.8), rgba(148, 163, 184, 0.35));
+}
+
+.origin-route-progress-train {
+  position: absolute;
+  left: -8px;
+  top: -4px;
+  font-size: 1rem;
+}
+
+.origin-route-eta {
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.origin-route-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.origin-route-facts span,
+.origin-route-fallback span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.38);
+  color: #dbeafe;
+  font-size: 0.84rem;
 }
 
 .origin-mode-switch {
@@ -2306,6 +2649,12 @@ watch(showTransferWalkNodes, () => {
   color: rgba(226, 232, 240, 0.88);
 }
 
+@media (max-width: 900px) {
+  .origin-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 720px) {
   .dashboard-view {
     padding: 18px 14px 40px;
@@ -2330,6 +2679,19 @@ watch(showTransferWalkNodes, () => {
 
   .event-meta-text {
     white-space: normal;
+  }
+
+  .origin-card-head {
+    flex-direction: column;
+  }
+
+  .origin-map-card,
+  .origin-route-card {
+    padding: 14px;
+  }
+
+  .origin-map-canvas {
+    min-height: 180px;
   }
 }
 </style>
