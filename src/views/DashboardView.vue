@@ -1671,7 +1671,10 @@ watch(showTransferWalkNodes, () => {
 
             <div v-if="hasCdTrainRoute" class="origin-route-body">
               <div v-if="trainCarrierLabel" class="origin-train-brand origin-train-brand--hero">
-                <SvgIcon v-if="trainCarrierIcon" :icon="trainCarrierIcon" dimension="28" fallback-text="CD" />
+                <span class="origin-train-logo-shell">
+                  <SvgIcon v-if="trainCarrierIcon" class="origin-train-logo" :icon="trainCarrierIcon" dimension="28"
+                    fallback-text="CD" />
+                </span>
                 <div>
                   <strong>{{ trainCarrierLabel }}</strong>
                   <span v-if="trainNameLabel">{{ trainNameLabel }}</span>
@@ -1681,8 +1684,11 @@ watch(showTransferWalkNodes, () => {
               <div class="origin-route-line">
                 <div class="origin-route-stop origin-route-stop--start">
                   <span class="origin-route-dot"></span>
-                  <div>
-                    <strong>{{ trainDetection?.originStationName || t('views.dashboard.events.currentLocation.routeCurrentStop') }}</strong>
+                  <div class="origin-route-stop-shell origin-route-stop-shell--muted">
+                    <div class="origin-route-stop-copy">
+                      <span class="origin-route-stop-label">{{ t('views.dashboard.events.connection.startLabel') }}</span>
+                      <strong>{{ trainDetection?.originStationName || t('views.dashboard.events.currentLocation.routeCurrentStop') }}</strong>
+                    </div>
                   </div>
                 </div>
                 <div class="origin-route-progress">
@@ -1691,10 +1697,16 @@ watch(showTransferWalkNodes, () => {
                 </div>
                 <div class="origin-route-stop origin-route-stop--current">
                   <span class="origin-route-dot origin-route-dot--pulse"></span>
-                  <div>
-                    <strong>{{ currentLocation?.address || t('views.dashboard.events.currentLocation.routeCurrentStop') }}</strong>
-                    <span v-if="routeEtaLabel">{{ routeEtaLabel }}</span>
-                    <span v-if="routeEtaValueLabel" class="origin-route-eta">{{ routeEtaValueLabel }}</span>
+                  <div class="origin-route-stop-shell origin-route-stop-shell--current">
+                    <div class="origin-route-stop-copy">
+                      <span class="origin-route-stop-label">{{ t('views.dashboard.events.currentLocation.routeCurrentStop') }}</span>
+                      <strong>{{ currentLocation?.address || t('views.dashboard.events.currentLocation.routeCurrentStop') }}</strong>
+                      <span v-if="routeEtaLabel">{{ routeEtaLabel }}</span>
+                    </div>
+                    <div v-if="routeEtaValueLabel || trainSpeedLabel" class="origin-route-stop-meta">
+                      <span v-if="routeEtaValueLabel" class="origin-route-eta">{{ routeEtaValueLabel }}</span>
+                      <span v-if="trainSpeedLabel" class="origin-route-chip origin-route-chip--accent">{{ trainSpeedLabel }}</span>
+                    </div>
                   </div>
                 </div>
                 <div class="origin-route-progress">
@@ -1702,15 +1714,17 @@ watch(showTransferWalkNodes, () => {
                 </div>
                 <div class="origin-route-stop origin-route-stop--end">
                   <span class="origin-route-dot origin-route-dot--outline"></span>
-                  <div>
-                    <strong>{{ trainDetection?.nextStationName || trainDetection?.finalStationName || t('views.dashboard.events.currentLocation.routeCurrentStop') }}</strong>
-                    <span v-if="trainDetection?.finalStationName">{{ t('views.dashboard.events.currentLocation.finalStationLabel', { value: trainDetection.finalStationName }) }}</span>
+                  <div class="origin-route-stop-shell origin-route-stop-shell--muted">
+                    <div class="origin-route-stop-copy">
+                      <span class="origin-route-stop-label">{{ t('views.dashboard.events.connection.endLabel') }}</span>
+                      <strong>{{ trainDetection?.nextStationName || trainDetection?.finalStationName || t('views.dashboard.events.currentLocation.routeCurrentStop') }}</strong>
+                      <span v-if="trainDetection?.finalStationName">{{ t('views.dashboard.events.currentLocation.finalStationLabel', { value: trainDetection.finalStationName }) }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
               <div class="origin-route-facts">
-                <span v-if="trainSpeedLabel">{{ trainSpeedLabel }}</span>
                 <span v-if="trainConnectionLabel">{{ trainConnectionLabel }}</span>
                 <span v-if="browserTrainIspLabel">{{ browserTrainIspLabel }}</span>
                 <span v-if="browserTrainStatusLabel">{{ browserTrainStatusLabel }}</span>
@@ -2256,6 +2270,21 @@ watch(showTransferWalkNodes, () => {
   background: rgba(11, 86, 163, 0.16);
 }
 
+.origin-train-logo-shell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08), 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.origin-train-logo {
+  color: #173a79;
+}
+
 .origin-train-brand--hero div {
   display: grid;
   gap: 2px;
@@ -2268,22 +2297,72 @@ watch(showTransferWalkNodes, () => {
 .origin-route-line {
   display: grid;
   gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .origin-route-stop {
   display: grid;
-  grid-template-columns: 18px 1fr;
+  grid-template-columns: 18px minmax(0, 1fr);
   gap: 12px;
   align-items: flex-start;
 }
 
-.origin-route-stop div {
+.origin-route-stop--current {
+  align-items: stretch;
+}
+
+.origin-route-stop-shell {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.origin-route-stop-shell--muted {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.origin-route-stop-shell--current {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(244, 63, 94, 0.12));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.origin-route-stop-copy {
   display: grid;
   gap: 3px;
+  min-width: 0;
+}
+
+.origin-route-stop-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.origin-route-stop-label {
+  color: #93c5fd;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .origin-route-stop strong {
   color: #f8fafc;
+  overflow-wrap: anywhere;
+}
+
+.origin-route-stop--start strong,
+.origin-route-stop--end strong,
+.origin-route-stop--start span:last-child,
+.origin-route-stop--end span:last-child {
+  color: rgba(226, 232, 240, 0.74);
 }
 
 .origin-route-dot {
@@ -2329,8 +2408,34 @@ watch(showTransferWalkNodes, () => {
 }
 
 .origin-route-eta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.32);
   color: #f8fafc;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.origin-route-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.38);
+  color: #dbeafe;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.origin-route-chip--accent {
+  background: rgba(219, 39, 119, 0.2);
+  color: #ffe4e6;
 }
 
 .origin-route-facts {
@@ -2711,6 +2816,10 @@ watch(showTransferWalkNodes, () => {
 
   .origin-map-canvas {
     min-height: 180px;
+  }
+
+  .origin-route-stop--current {
+    grid-template-columns: 18px minmax(0, 1fr);
   }
 }
 </style>
